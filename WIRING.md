@@ -7,8 +7,8 @@ This document provides comprehensive wiring instructions for the Multimode Clock
 ### Required Components
 - 1x Raspberry Pi Pico
 - 3x Push buttons (momentary, normally open)
-- 4x LEDs (any color, 3mm or 5mm)
-- 4x 220Ω resistors (for LED current limiting)
+- 5x LEDs (any color, 3mm or 5mm)
+- 5x 220Ω resistors (for LED current limiting)
 - 1x 10kΩ potentiometer (linear taper)
 - 1x Breadboard (half-size or larger)
 - Jumper wires (male-to-male)
@@ -28,6 +28,7 @@ This document provides comprehensive wiring instructions for the Multimode Clock
 | Single Step LED | GPIO 6 | Pin 9 | LED + 220Ω resistor to GND |
 | Low Freq LED | GPIO 7 | Pin 10 | LED + 220Ω resistor to GND |
 | High Freq LED | GPIO 8 | Pin 11 | LED + 220Ω resistor to GND |
+| UART Mode LED | GPIO 10 | Pin 14 | LED + 220Ω resistor to GND |
 | Clock Output | GPIO 9 | Pin 12 | To target circuit |
 | UART1 TX | GPIO 16 | Pin 21 | To external UART RX |
 | UART1 RX | GPIO 17 | Pin 22 | To external UART TX |
@@ -82,6 +83,11 @@ For each LED, connect as follows:
 2. Connect the other end of the resistor to GPIO 8 (Pin 11)
 3. Connect LED cathode (short leg) to the ground rail
 
+**UART Control Mode LED:**
+1. Connect LED anode (long leg) to one end of a 220Ω resistor
+2. Connect the other end of the resistor to GPIO 10 (Pin 14)
+3. Connect LED cathode (short leg) to the ground rail
+
 ### Step 4: Potentiometer
 1. Connect the center pin (wiper) of the potentiometer to GPIO 26 (Pin 31)
 2. Connect one outer pin to the positive power rail (3.3V)
@@ -128,6 +134,9 @@ For each LED, connect as follows:
          │                                  │
          │ 11 (GPIO 8)                      │
          ├──── LED4 + Resistor ─────────────┤
+         │                                  │
+         │ 14 (GPIO 10)                     │
+         ├──── LED5 + Resistor ─────────────┤
          │                                  │
          │ 12 (GPIO 9) ──── Clock Output    │
          │                                  │

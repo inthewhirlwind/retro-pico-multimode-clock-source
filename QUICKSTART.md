@@ -33,7 +33,7 @@ make -j4
 | Button 2 | 3 | 5 |
 | Button 3 | 4 | 6 |
 | Clock Activity LED | 5 | 7 |
-| Mode LEDs | 6,7,8 | 9,10,11 |
+| Mode LEDs | 6,7,8,10 | 9,10,11,14 |
 | Clock Output | 9 | 12 |
 | UART1 TX | 16 | 21 |
 | UART1 RX | 17 | 22 |
@@ -45,13 +45,16 @@ make -j4
 - **Button 1**: Single Step Mode (manual toggle)
 - **Button 2**: Low Frequency Mode (1Hz-100kHz via pot)
 - **Button 3**: High Frequency Mode (fixed 1MHz)
+- **Hold any button 3 seconds**: UART Control Mode (interactive commands)
 
 ### LED Indicators
 - **Clock Activity**: Shows current clock state
-- **Mode LEDs**: One lit per active mode
+- **Mode LEDs**: One lit per active mode (4 total modes)
 
-### UART Output
-Connect USB for real-time status at 115200 baud, or use GPIO 16 (UART1 TX) for external monitoring.
+### UART Interface
+- **USB**: Connect USB for real-time status at 115200 baud
+- **GPIO 16 (UART1 TX)**: External monitoring output
+- **UART Control Mode**: Interactive command interface - type `menu` for help
 
 ## Troubleshooting
 

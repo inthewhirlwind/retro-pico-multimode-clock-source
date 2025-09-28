@@ -1,6 +1,6 @@
 # Retro Pico Multimode Clock Source
 
-A versatile multi-mode clock generator for retro computing applications using a Raspberry Pi Pico. This project provides three distinct clock modes with LED indicators and UART status output.
+A versatile multi-mode clock generator for retro computing applications using a Raspberry Pi Pico. This project provides four distinct clock modes with LED indicators and UART status output.
 
 ## Features
 
@@ -25,23 +25,36 @@ A versatile multi-mode clock generator for retro computing applications using a 
    - Uses PWM for precise timing
    - Ideal for high-speed clock requirements
 
+4. **UART Control Mode** *(New)*
+   - Interactive UART command interface
+   - Commands available:
+     - `stop` - Stop the clock output
+     - `toggle` - Toggle clock state once
+     - `freq <Hz>` - Set frequency (1Hz to 1MHz) and run continuously
+     - `menu` - Show command menu
+     - `status` - Display current status
+   - 30-second inactivity timeout
+   - Press any button to return to previous mode
+
 ### User Interface
 
 - **3 Push Buttons**:
   - Button 1: Single Step Mode toggle/selection
   - Button 2: Low-Frequency Mode selection
   - Button 3: High-Frequency Mode selection
-- **4 LED Indicators**:
+  - **Hold any button for 3 seconds**: Enter UART Control Mode
+- **5 LED Indicators**:
   - Clock activity LED (shows current clock state)
-  - Mode indicator LEDs (one for each mode)
+  - Mode indicator LEDs (one for each mode including UART mode)
 - **UART Output**: Real-time mode and frequency information
+- **UART Input**: Interactive command interface in UART Control Mode
 - **Potentiometer**: Frequency control for Low-Frequency Mode
 
 ## Hardware Requirements
 
 - Raspberry Pi Pico (or Pico W)
 - 3 Push buttons (momentary, normally open)
-- 4 LEDs with appropriate current-limiting resistors (220Ω recommended)
+- 5 LEDs with appropriate current-limiting resistors (220Ω recommended)
 - 1 Potentiometer (10kΩ recommended)
 - Breadboard and jumper wires
 - 3.3V pull-up resistors for buttons (optional, internal pull-ups used)
@@ -57,6 +70,7 @@ A versatile multi-mode clock generator for retro computing applications using a 
 | Single Step Mode LED | GPIO 6 | Single step mode indicator |
 | Low Freq Mode LED | GPIO 7 | Low frequency mode indicator |
 | High Freq Mode LED | GPIO 8 | High frequency mode indicator |
+| UART Mode LED | GPIO 10 | UART control mode indicator |
 | Clock Output | GPIO 9 | Main clock signal output |
 | UART1 TX | GPIO 16 | Second UART transmit (status output) |
 | UART1 RX | GPIO 17 | Second UART receive (not used) |
@@ -158,6 +172,7 @@ make -j4
   - Button 1: Activates Single Step Mode (or toggles clock if already in this mode)
   - Button 2: Switches to Low-Frequency Mode
   - Button 3: Switches to High-Frequency Mode
+- **Hold Any Button for 3 seconds**: Enters UART Control Mode
 
 ### Single Step Mode
 - Press Button 1 to manually toggle the clock output
@@ -176,6 +191,40 @@ make -j4
 - Uses hardware PWM for precise timing
 - Clock activity LED remains on during operation
 
+### UART Control Mode
+- Enter by holding any button for 3 seconds
+- Interactive command prompt via UART
+- Available commands:
+  - `stop` - Stops clock output
+  - `toggle` - Toggles clock state once
+  - `freq 1000` - Sets frequency to 1000Hz and runs continuously
+  - `menu` - Shows available commands
+  - `status` - Displays current mode status
+- Frequency range: 1Hz to 1MHz
+- 30-second timeout returns to previous mode
+- Press any button to immediately return to previous mode
+- Example session:
+  ```
+  === UART Control Mode ===
+  Commands:
+    stop      - Stop the clock
+    toggle    - Toggle clock state once
+    freq <Hz> - Set frequency (1Hz to 1MHz) and run
+    menu      - Show this menu again
+    status    - Show current status
+
+  Press any button to return to previous mode
+  Mode will timeout after 30 seconds of inactivity
+
+  Cmd> freq 5000
+  Frequency set to 5000 Hz and running
+  Cmd> stop
+  Clock stopped
+  Cmd> toggle
+  Clock toggled to HIGH
+  Cmd>
+  ```
+
 ## UART Output
 
 The device provides status output via two UART interfaces:
@@ -187,8 +236,9 @@ Both UARTs output the same real-time status information:
 
 ```
 === Clock Source Status ===
-Mode: Low Frequency
-Frequency: 1543 Hz
+Mode: UART Control
+Frequency: 5000 Hz
+Status: Running
 Clock State: HIGH
 ===========================
 ```

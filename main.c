@@ -5,6 +5,7 @@
  * - Single Step Mode: Manual clock toggle with button
  * - Low-Frequency Mode: 1Hz-100Hz (20% pot) and 100Hz-100kHz (80% pot)  
  * - High-Frequency Mode: Fixed 1MHz output
+ * - UART Control Mode: UART-controlled frequency from 1Hz to 1MHz
  * - LED indicators for each mode
  * - UART output for status display
  */
@@ -24,11 +25,13 @@
 typedef enum {
     MODE_SINGLE_STEP,
     MODE_LOW_FREQ,
-    MODE_HIGH_FREQ
+    MODE_HIGH_FREQ,
+    MODE_UART_CONTROL
 } clock_mode_t;
 
 // Global variables
 static clock_mode_t current_mode = MODE_SINGLE_STEP;
+static clock_mode_t previous_mode = MODE_SINGLE_STEP;
 static bool clock_state = false;
 static uint32_t current_frequency = 0;
 static bool single_step_active = false;
@@ -36,9 +39,18 @@ static bool single_step_active = false;
 // Button debouncing
 static uint32_t last_button_time[3] = {0, 0, 0};
 
-// Timer for low frequency mode
+// Timer for low frequency mode and UART mode
 static struct repeating_timer low_freq_timer;
+static struct repeating_timer uart_freq_timer;
 static bool timer_active = false;
+static bool uart_timer_active = false;
+
+// UART control mode variables
+static bool uart_clock_running = false;
+static uint32_t uart_set_frequency = 0;
+static char uart_cmd_buffer[UART_CMD_BUFFER_SIZE];
+static uint8_t uart_cmd_index = 0;
+static uint32_t uart_menu_timeout = 0;
 
 // Function prototypes
 void init_gpio(void);
@@ -55,9 +67,16 @@ void update_low_frequency(void);
 void start_high_frequency(void);
 void stop_high_frequency(void);
 bool low_freq_timer_callback(struct repeating_timer *t);
+bool uart_freq_timer_callback(struct repeating_timer *t);
 void print_status(void);
 void print_status_to_uart1(void);
 uint32_t calculate_frequency_from_pot(uint16_t adc_value);
+void handle_uart_control(void);
+void show_uart_menu(void);
+void process_uart_command(const char* cmd);
+void start_uart_frequency(uint32_t frequency);
+void stop_uart_frequency(void);
+bool any_button_pressed(void);
 
 int main() {
     stdio_init_all();
@@ -73,14 +92,48 @@ int main() {
     
     printf("Multimode Clock Source Starting...\n");
     uart_puts(uart1, "Multimode Clock Source Starting...\n");
+    printf("Press and hold any button for 3 seconds to enter UART Control Mode\n");
     print_status();
     
+    uint32_t button_hold_start = 0;
+    bool button_held = false;
+    
     while (true) {
-        handle_buttons();
+        // Check for button hold to enter UART mode (only if not in UART mode)
+        if (current_mode != MODE_UART_CONTROL) {
+            if (any_button_pressed()) {
+                if (!button_held) {
+                    button_hold_start = to_ms_since_boot(get_absolute_time());
+                    button_held = true;
+                    printf("Hold button for UART mode...\n");
+                } else {
+                    uint32_t hold_time = to_ms_since_boot(get_absolute_time()) - button_hold_start;
+                    if (hold_time >= 3000) { // 3 seconds
+                        previous_mode = current_mode;
+                        set_mode(MODE_UART_CONTROL);
+                        printf("Entered UART Control Mode\n");
+                        button_held = false;
+                    }
+                }
+            } else {
+                if (button_held) {
+                    // Button released before 3 seconds - handle normal button press
+                    // Use a small delay to ensure button state is stable
+                    sleep_ms(50); // Debounce delay
+                    handle_buttons();
+                }
+                button_held = false;
+            }
+        }
         
-        // Update low frequency if in that mode
+        // Handle mode-specific updates
         if (current_mode == MODE_LOW_FREQ) {
             update_low_frequency();
+        } else if (current_mode == MODE_UART_CONTROL) {
+            handle_uart_control();
+        } else if (current_mode != MODE_UART_CONTROL && !button_held) {
+            // Only handle normal button presses when not holding for UART mode
+            handle_buttons();
         }
         
         sleep_ms(UPDATE_INTERVAL_MS); // Small delay to prevent excessive polling
@@ -119,6 +172,10 @@ void init_gpio(void) {
     gpio_init(LED_HIGH_FREQ);
     gpio_set_dir(LED_HIGH_FREQ, GPIO_OUT);
     gpio_put(LED_HIGH_FREQ, 0);
+    
+    gpio_init(LED_UART_MODE);
+    gpio_set_dir(LED_UART_MODE, GPIO_OUT);
+    gpio_put(LED_UART_MODE, 0);
     
     // Initialize clock output
     gpio_init(CLOCK_OUTPUT);
@@ -191,10 +248,16 @@ void set_mode(clock_mode_t mode) {
         cancel_repeating_timer(&low_freq_timer);
         timer_active = false;
     }
+    if (uart_timer_active) {
+        cancel_repeating_timer(&uart_freq_timer);
+        uart_timer_active = false;
+    }
     stop_high_frequency();
+    stop_uart_frequency();
     
     current_mode = mode;
     single_step_active = false;
+    uart_clock_running = false;
     set_clock_output(false);
     
     switch (mode) {
@@ -210,6 +273,13 @@ void set_mode(clock_mode_t mode) {
             current_frequency = HIGH_FREQ_OUTPUT; // 1MHz
             start_high_frequency();
             break;
+            
+        case MODE_UART_CONTROL:
+            current_frequency = 0;
+            uart_set_frequency = 0;
+            uart_menu_timeout = to_ms_since_boot(get_absolute_time()) + UART_MENU_TIMEOUT_MS;
+            show_uart_menu();
+            break;
     }
     
     update_leds();
@@ -221,6 +291,7 @@ void update_leds(void) {
     gpio_put(LED_SINGLE_STEP, 0);
     gpio_put(LED_LOW_FREQ, 0);
     gpio_put(LED_HIGH_FREQ, 0);
+    gpio_put(LED_UART_MODE, 0);
     
     // Set the appropriate mode LED
     switch (current_mode) {
@@ -232,6 +303,9 @@ void update_leds(void) {
             break;
         case MODE_HIGH_FREQ:
             gpio_put(LED_HIGH_FREQ, 1);
+            break;
+        case MODE_UART_CONTROL:
+            gpio_put(LED_UART_MODE, 1);
             break;
     }
     
@@ -358,6 +432,18 @@ void print_status_to_uart1(void) {
             snprintf(hfreq_str, sizeof(hfreq_str), "Frequency: %lu Hz (1MHz)\n", current_frequency);
             uart_puts(uart1, hfreq_str);
             break;
+            
+        case MODE_UART_CONTROL:
+            uart_puts(uart1, "Mode: UART Control\n");
+            if (uart_clock_running && uart_set_frequency > 0) {
+                char ufreq_str[32];
+                snprintf(ufreq_str, sizeof(ufreq_str), "Frequency: %lu Hz\n", uart_set_frequency);
+                uart_puts(uart1, ufreq_str);
+                uart_puts(uart1, "Status: Running\n");
+            } else {
+                uart_puts(uart1, "Status: Stopped\n");
+            }
+            break;
     }
     
     // Clock state
@@ -389,6 +475,16 @@ void print_status(void) {
             printf("Mode: High Frequency\n");
             printf("Frequency: %lu Hz (1MHz)\n", current_frequency);
             break;
+            
+        case MODE_UART_CONTROL:
+            printf("Mode: UART Control\n");
+            if (uart_clock_running && uart_set_frequency > 0) {
+                printf("Frequency: %lu Hz\n", uart_set_frequency);
+                printf("Status: Running\n");
+            } else {
+                printf("Status: Stopped\n");
+            }
+            break;
     }
     
     printf("Clock State: %s\n", clock_state ? "HIGH" : "LOW");
@@ -396,4 +492,161 @@ void print_status(void) {
     
     // Also send status to second UART
     print_status_to_uart1();
+}
+
+bool uart_freq_timer_callback(struct repeating_timer *t) {
+    toggle_clock_output();
+    return true; // Continue repeating
+}
+
+void handle_uart_control(void) {
+    // Check for button press to exit UART mode
+    if (any_button_pressed()) {
+        printf("Button pressed - returning to %s mode\n", 
+               previous_mode == MODE_SINGLE_STEP ? "Single Step" :
+               previous_mode == MODE_LOW_FREQ ? "Low Frequency" : "High Frequency");
+        set_mode(previous_mode);
+        return;
+    }
+    
+    // Check for timeout
+    if (to_ms_since_boot(get_absolute_time()) > uart_menu_timeout) {
+        printf("UART menu timeout - returning to %s mode\n",
+               previous_mode == MODE_SINGLE_STEP ? "Single Step" :
+               previous_mode == MODE_LOW_FREQ ? "Low Frequency" : "High Frequency");
+        set_mode(previous_mode);
+        return;
+    }
+    
+    // Check for UART input
+    while (uart_is_readable(uart0)) {
+        char c = uart_getc(uart0);
+        
+        // Reset timeout on any input
+        uart_menu_timeout = to_ms_since_boot(get_absolute_time()) + UART_MENU_TIMEOUT_MS;
+        
+        if (c == '\r' || c == '\n') {
+            if (uart_cmd_index > 0) {
+                uart_cmd_buffer[uart_cmd_index] = '\0';
+                printf("\n"); // New line after command
+                process_uart_command(uart_cmd_buffer);
+                uart_cmd_index = 0;
+            } else {
+                printf("Cmd> "); // Show prompt for empty commands
+            }
+        } else if (c == '\b' || c == 127) { // Backspace or DEL
+            if (uart_cmd_index > 0) {
+                uart_cmd_index--;
+                printf("\b \b"); // Erase character from terminal
+            }
+        } else if (uart_cmd_index < UART_CMD_BUFFER_SIZE - 1 && c >= 32 && c < 127) {
+            // Printable ASCII characters only
+            uart_cmd_buffer[uart_cmd_index++] = c;
+            printf("%c", c); // Echo character
+        }
+        // Ignore other control characters
+    }
+}
+
+void show_uart_menu(void) {
+    printf("\n=== UART Control Mode ===\n");
+    printf("Commands:\n");
+    printf("  stop      - Stop the clock\n");
+    printf("  toggle    - Toggle clock state once\n");
+    printf("  freq <Hz> - Set frequency (1Hz to 1MHz) and run\n");
+    printf("  menu      - Show this menu again\n");
+    printf("  status    - Show current status\n");
+    printf("\nPress any button to return to previous mode\n");
+    printf("Mode will timeout after 30 seconds of inactivity\n");
+    printf("\nCmd> ");
+}
+
+void process_uart_command(const char* cmd) {
+    // Trim leading/trailing whitespace and convert to lowercase for comparison
+    while (*cmd == ' ') cmd++; // Skip leading spaces
+    
+    if (strcmp(cmd, "stop") == 0) {
+        stop_uart_frequency();
+        uart_clock_running = false;
+        set_clock_output(false);
+        printf("Clock stopped\n");
+        
+    } else if (strcmp(cmd, "toggle") == 0) {
+        toggle_clock_output();
+        printf("Clock toggled to %s\n", clock_state ? "HIGH" : "LOW");
+        uart_clock_running = false; // Stop any running frequency
+        stop_uart_frequency();
+        
+    } else if (strncmp(cmd, "freq ", 5) == 0) {
+        const char* freq_str = cmd + 5;
+        // Skip any spaces after "freq"
+        while (*freq_str == ' ') freq_str++;
+        
+        if (strlen(freq_str) == 0) {
+            printf("Missing frequency value. Usage: freq <Hz>\n");
+            return;
+        }
+        
+        char* endptr;
+        long freq_long = strtol(freq_str, &endptr, 10);
+        
+        // Check if conversion was successful and value is within range
+        if (endptr == freq_str || *endptr != '\0') {
+            printf("Invalid frequency format. Use numbers only.\n");
+        } else if (freq_long < MIN_UART_FREQ || freq_long > MAX_UART_FREQ) {
+            printf("Invalid frequency. Range: %d Hz to %d Hz\n", MIN_UART_FREQ, MAX_UART_FREQ);
+        } else {
+            uint32_t freq = (uint32_t)freq_long;
+            uart_set_frequency = freq;
+            start_uart_frequency(freq);
+            uart_clock_running = true;
+            printf("Frequency set to %lu Hz and running\n", freq);
+        }
+        
+    } else if (strcmp(cmd, "menu") == 0) {
+        show_uart_menu();
+        
+    } else if (strcmp(cmd, "status") == 0) {
+        print_status();
+        
+    } else if (strlen(cmd) == 0) {
+        // Empty command, do nothing
+        
+    } else {
+        printf("Unknown command: %s\n", cmd);
+        printf("Type 'menu' for help\n");
+    }
+    
+    printf("Cmd> ");
+}
+
+void start_uart_frequency(uint32_t frequency) {
+    stop_uart_frequency(); // Stop any existing timer
+    
+    if (frequency > 0 && frequency <= MAX_UART_FREQ) {
+        // Calculate half period in microseconds
+        // For very high frequencies, ensure we don't overflow or get too small periods
+        if (frequency > 100000) { // Above 100kHz, use minimum safe period
+            uint32_t period_us = 500000 / frequency;
+            if (period_us < 1) period_us = 1; // Minimum 1 microsecond
+            add_repeating_timer_us(-period_us, uart_freq_timer_callback, NULL, &uart_freq_timer);
+        } else {
+            uint32_t period_us = 500000 / frequency; // Half period in microseconds
+            add_repeating_timer_us(-period_us, uart_freq_timer_callback, NULL, &uart_freq_timer);
+        }
+        uart_timer_active = true;
+    }
+}
+
+void stop_uart_frequency(void) {
+    if (uart_timer_active) {
+        cancel_repeating_timer(&uart_freq_timer);
+        uart_timer_active = false;
+    }
+}
+
+bool any_button_pressed(void) {
+    return !gpio_get(BUTTON_SINGLE_STEP) || 
+           !gpio_get(BUTTON_LOW_FREQ) || 
+           !gpio_get(BUTTON_HIGH_FREQ);
 }
