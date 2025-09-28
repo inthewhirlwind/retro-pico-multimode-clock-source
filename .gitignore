@@ -53,3 +53,21 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# CMake build files
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Pico SDK build outputs
+*.bin
+*.uf2
+*.map
+*.dis
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
