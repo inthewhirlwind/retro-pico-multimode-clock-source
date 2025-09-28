@@ -30,7 +30,7 @@ A versatile multi-mode clock generator for retro computing applications using a 
    - Commands available:
      - `stop` - Stop the clock output
      - `toggle` - Toggle clock state once
-     - `freq <Hz>` - Set frequency (10Hz to 1MHz) and run continuously
+     - `freq <Hz>` - Set frequency (1Hz to 1MHz) and run continuously
      - `menu` - Show command menu
      - `status` - Display current status
    - 30-second inactivity timeout
@@ -200,7 +200,7 @@ make -j4
   - `freq 1000` - Sets frequency to 1000Hz and runs continuously
   - `menu` - Shows available commands
   - `status` - Displays current mode status
-- Frequency range: 10Hz to 1MHz
+- Frequency range: 1Hz to 1MHz
 - 30-second timeout returns to previous mode
 - Press any button to immediately return to previous mode
 - Example session:
@@ -209,7 +209,7 @@ make -j4
   Commands:
     stop      - Stop the clock
     toggle    - Toggle clock state once
-    freq <Hz> - Set frequency (10Hz to 1MHz) and run
+    freq <Hz> - Set frequency (1Hz to 1MHz) and run
     menu      - Show this menu again
     status    - Show current status
 
@@ -253,7 +253,7 @@ The secondary UART allows for external monitoring without requiring a USB connec
 
 ### Frequency Generation
 - **Low frequencies (1Hz-100kHz)**: Software timers with microsecond precision
-- **UART Control Mode (10Hz-1MHz)**: Hardware timers for improved accuracy
+- **UART Control Mode (1Hz-1MHz)**: PWM output for precise frequency and 50% duty cycle
 - **High frequency (1MHz)**: Hardware PWM for accuracy
 
 ### ADC Resolution

@@ -43,9 +43,8 @@ static uint32_t last_button_time[3] = {0, 0, 0};
 static struct repeating_timer low_freq_timer;
 static bool timer_active = false;
 
-// Hardware timer for UART mode (legacy - kept for compatibility)
+// Hardware timer for UART mode (legacy - kept for compatibility during transition)
 static alarm_id_t uart_alarm_id = 0;
-static uint32_t uart_half_period_us = 0;
 static bool uart_timer_active = false;
 
 // UART control mode variables
@@ -453,7 +452,11 @@ void print_status_to_uart1(void) {
     }
     
     // Clock state
-    if (clock_state) {
+    if (current_mode == MODE_UART_CONTROL && uart_pwm_active) {
+        uart_puts(uart1, "Clock State: PWM Active\n");
+    } else if (current_mode == MODE_HIGH_FREQ) {
+        uart_puts(uart1, "Clock State: PWM Active\n");
+    } else if (clock_state) {
         uart_puts(uart1, "Clock State: HIGH\n");
     } else {
         uart_puts(uart1, "Clock State: LOW\n");
@@ -493,7 +496,10 @@ void print_status(void) {
             break;
     }
     
-    printf("Clock State: %s\n", clock_state ? "HIGH" : "LOW");
+    printf("Clock State: %s\n", 
+           (current_mode == MODE_UART_CONTROL && uart_pwm_active) ? "PWM Active" :
+           (current_mode == MODE_HIGH_FREQ) ? "PWM Active" :
+           (clock_state ? "HIGH" : "LOW"));
     printf("===========================\n\n");
     
     // Also send status to second UART
@@ -685,7 +691,8 @@ void start_uart_pwm(uint32_t frequency) {
         
         // Set 50% duty cycle
         uint16_t duty_level = wrap / 2;
-        pwm_set_chan_level(slice_num, PWM_CHAN_A, duty_level);
+        uint channel = pwm_gpio_to_channel(CLOCK_OUTPUT);
+        pwm_set_chan_level(slice_num, channel, duty_level);
         
         // Enable PWM
         pwm_set_enabled(slice_num, true);
