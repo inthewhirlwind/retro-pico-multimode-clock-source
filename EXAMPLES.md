@@ -57,7 +57,52 @@ Clock State: HIGH
 ===========================
 ```
 
-## Example 4: Mode Switching During Operation
+## Example 4: UART Control Mode
+
+Use UART Control Mode for programmatic clock control:
+
+1. Hold any button for 3 seconds to enter UART Control Mode (LED 10 lit)
+2. Use serial terminal at 115200 baud to send commands
+3. Available commands:
+   - `stop` - Stops clock output
+   - `toggle` - Toggles clock state once  
+   - `freq 5000` - Sets 5kHz frequency and runs continuously
+   - `menu` - Shows command help
+   - `status` - Displays current status
+4. Press any button to return to previous mode
+5. 30-second timeout returns to previous mode automatically
+
+**Example UART Session:**
+```
+=== UART Control Mode ===
+Commands:
+  stop      - Stop the clock
+  toggle    - Toggle clock state once
+  freq <Hz> - Set frequency (1Hz to 1MHz) and run
+  menu      - Show this menu again
+  status    - Show current status
+
+Press any button to return to previous mode
+Mode will timeout after 30 seconds of inactivity
+
+Cmd> freq 1000
+Frequency set to 1000 Hz and running
+Cmd> stop
+Clock stopped
+Cmd> toggle
+Clock toggled to HIGH
+Cmd> status
+
+=== Clock Source Status ===
+Mode: UART Control
+Status: Stopped
+Clock State: HIGH
+===========================
+
+Cmd>
+```
+
+## Example 5: Mode Switching During Operation
 
 Switch between modes at any time:
 
@@ -65,9 +110,11 @@ Switch between modes at any time:
 2. Press Button 2 → switches to Low-Frequency Mode
 3. Press Button 3 → switches to High-Frequency Mode  
 4. Press Button 1 → switches back to Single Step Mode
-5. Each mode change updates LEDs and UART output
+5. Hold any button for 3 seconds → enters UART Control Mode
+6. Press any button while in UART mode → returns to previous mode
+7. Each mode change updates LEDs and UART output
 
-## Potentiometer Calibration Example
+## Example 6: Potentiometer Calibration Example
 
 To verify potentiometer frequency mapping:
 
@@ -77,7 +124,7 @@ To verify potentiometer frequency mapping:
 4. Turn pot fully clockwise → should read ~100kHz
 5. Verify smooth transitions across the range
 
-## Example 5: Dual UART Monitoring
+## Example 7: Dual UART Monitoring
 
 The device outputs status information simultaneously to both UART interfaces:
 
@@ -146,6 +193,20 @@ GND         ────→ Scope ground
 - LED 8 is lit (confirming High-Frequency Mode)  
 - Clock Activity LED is on
 - Use oscilloscope to verify 1MHz square wave on GPIO 9
+
+### Problem: UART Control Mode not responding
+**Check:**
+- LED 10 is lit (confirming UART Control Mode)
+- Serial terminal connected at 115200 baud
+- Try typing `menu` command and pressing Enter
+- Verify UART connection and terminal settings
+
+### Problem: Cannot enter UART Control Mode
+**Check:**
+- Hold button for full 3 seconds
+- Check button connections
+- Look for "Hold button for UART mode..." message in UART output
+- Try different buttons if one is faulty
 
 ### Problem: No output on second UART (GPIO 16)
 **Check:**
