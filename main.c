@@ -36,9 +36,8 @@ static bool single_step_active = false;
 // Button debouncing
 static uint32_t last_button_time[3] = {0, 0, 0};
 
-// Timer for low frequency mode
-static struct repeating_timer low_freq_timer;
-static bool timer_active = false;
+// Hardware timer state for low frequency mode
+static bool low_freq_pwm_active = false;
 
 // Function prototypes
 void init_gpio(void);
@@ -52,9 +51,11 @@ void update_leds(void);
 void toggle_clock_output(void);
 void set_clock_output(bool state);
 void update_low_frequency(void);
+void start_low_frequency(uint32_t frequency);
+void stop_low_frequency(void);
+void calculate_pwm_params(uint32_t frequency, float *clkdiv, uint16_t *wrap, uint16_t *level);
 void start_high_frequency(void);
 void stop_high_frequency(void);
-bool low_freq_timer_callback(struct repeating_timer *t);
 void print_status(void);
 void print_status_to_uart1(void);
 uint32_t calculate_frequency_from_pot(uint16_t adc_value);
@@ -187,10 +188,7 @@ bool button_pressed(uint pin, uint button_index) {
 
 void set_mode(clock_mode_t mode) {
     // Stop any active timers or PWM
-    if (timer_active) {
-        cancel_repeating_timer(&low_freq_timer);
-        timer_active = false;
-    }
+    stop_low_frequency();
     stop_high_frequency();
     
     current_mode = mode;
@@ -226,17 +224,18 @@ void update_leds(void) {
     switch (current_mode) {
         case MODE_SINGLE_STEP:
             gpio_put(LED_SINGLE_STEP, 1);
+            // Update clock activity LED for single step mode
+            gpio_put(LED_CLOCK_ACTIVITY, clock_state);
             break;
         case MODE_LOW_FREQ:
             gpio_put(LED_LOW_FREQ, 1);
+            // Clock activity LED is managed by start_low_frequency/stop_low_frequency
             break;
         case MODE_HIGH_FREQ:
             gpio_put(LED_HIGH_FREQ, 1);
+            // Clock activity LED is managed by start_high_frequency/stop_high_frequency
             break;
     }
-    
-    // Update clock activity LED
-    gpio_put(LED_CLOCK_ACTIVITY, clock_state);
 }
 
 void toggle_clock_output(void) {
@@ -247,8 +246,11 @@ void toggle_clock_output(void) {
 
 void set_clock_output(bool state) {
     clock_state = state;
-    gpio_put(CLOCK_OUTPUT, state);
-    gpio_put(LED_CLOCK_ACTIVITY, state);
+    // Only set GPIO output if not using PWM (i.e., in single step mode)
+    if (current_mode == MODE_SINGLE_STEP) {
+        gpio_put(CLOCK_OUTPUT, state);
+        gpio_put(LED_CLOCK_ACTIVITY, state);
+    }
 }
 
 void update_low_frequency(void) {
@@ -258,20 +260,91 @@ void update_low_frequency(void) {
     if (new_frequency != current_frequency) {
         current_frequency = new_frequency;
         
-        // Stop current timer
-        if (timer_active) {
-            cancel_repeating_timer(&low_freq_timer);
-            timer_active = false;
-        }
+        // Stop current PWM
+        stop_low_frequency();
         
-        // Start new timer if frequency > 0
+        // Start new PWM if frequency > 0
         if (current_frequency > 0) {
-            uint32_t period_us = 500000 / current_frequency; // Half period in microseconds
-            add_repeating_timer_us(-period_us, low_freq_timer_callback, NULL, &low_freq_timer);
-            timer_active = true;
+            start_low_frequency(current_frequency);
         }
         
         print_status();
+    }
+}
+
+void calculate_pwm_params(uint32_t frequency, float *clkdiv, uint16_t *wrap, uint16_t *level) {
+    // System clock is typically 125MHz
+    const uint32_t system_clock_hz = 125000000;
+    
+    // We need to find clkdiv and wrap such that:
+    // output_frequency = system_clock_hz / clkdiv / (wrap + 1)
+    // We want 50% duty cycle, so level = wrap / 2
+    
+    // For lower frequencies, we need higher wrap values for better resolution
+    // Start with a reasonable wrap value and calculate the required clock divider
+    
+    if (frequency >= 1000) {
+        // For frequencies >= 1kHz, use smaller wrap values
+        *wrap = 124; // This gives us good resolution
+        *clkdiv = (float)system_clock_hz / (frequency * (*wrap + 1));
+    } else {
+        // For frequencies < 1kHz, use larger wrap values for better precision
+        *wrap = 1249; // This gives us very good resolution for low frequencies
+        *clkdiv = (float)system_clock_hz / (frequency * (*wrap + 1));
+    }
+    
+    // Ensure clkdiv is within valid range (1.0 to 255.0)
+    if (*clkdiv < 1.0f) {
+        *clkdiv = 1.0f;
+        // Recalculate wrap for the minimum clock divider
+        *wrap = (system_clock_hz / frequency) - 1;
+        if (*wrap > 65535) *wrap = 65535; // PWM wrap is 16-bit
+    } else if (*clkdiv > 255.0f) {
+        *clkdiv = 255.0f;
+        // Recalculate wrap for the maximum clock divider  
+        *wrap = (system_clock_hz / (255 * frequency)) - 1;
+        if (*wrap > 65535) *wrap = 65535; // PWM wrap is 16-bit
+    }
+    
+    // Set 50% duty cycle
+    *level = *wrap / 2;
+}
+
+void start_low_frequency(uint32_t frequency) {
+    // Calculate PWM parameters for the desired frequency
+    float clkdiv;
+    uint16_t wrap, level;
+    calculate_pwm_params(frequency, &clkdiv, &wrap, &level);
+    
+    // Set GPIO function to PWM
+    gpio_set_function(CLOCK_OUTPUT, GPIO_FUNC_PWM);
+    
+    // Configure PWM
+    uint slice_num = pwm_gpio_to_slice_num(CLOCK_OUTPUT);
+    pwm_set_clkdiv(slice_num, clkdiv);
+    pwm_set_wrap(slice_num, wrap);
+    pwm_set_chan_level(slice_num, PWM_CHAN_A, level); // 50% duty cycle
+    
+    // Enable PWM
+    pwm_set_enabled(slice_num, true);
+    low_freq_pwm_active = true;
+    
+    // Set clock activity LED on
+    gpio_put(LED_CLOCK_ACTIVITY, 1);
+}
+
+void stop_low_frequency(void) {
+    if (low_freq_pwm_active) {
+        uint slice_num = pwm_gpio_to_slice_num(CLOCK_OUTPUT);
+        pwm_set_enabled(slice_num, false);
+        
+        // Reset GPIO function back to SIO (software controlled)
+        gpio_set_function(CLOCK_OUTPUT, GPIO_FUNC_SIO);
+        gpio_set_dir(CLOCK_OUTPUT, GPIO_OUT);
+        gpio_put(CLOCK_OUTPUT, 0);
+        
+        low_freq_pwm_active = false;
+        gpio_put(LED_CLOCK_ACTIVITY, 0);
     }
 }
 
@@ -289,10 +362,6 @@ uint32_t calculate_frequency_from_pot(uint16_t adc_value) {
     }
 }
 
-bool low_freq_timer_callback(struct repeating_timer *t) {
-    toggle_clock_output();
-    return true; // Continue repeating
-}
 
 void start_high_frequency(void) {
     // Set GPIO function to PWM

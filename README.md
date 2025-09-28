@@ -202,7 +202,7 @@ The secondary UART allows for external monitoring without requiring a USB connec
 - Uses timestamp comparison for reliable operation
 
 ### Frequency Generation
-- **Low frequencies (1Hz-100kHz)**: Software timers with microsecond precision
+- **Low frequencies (1Hz-100kHz)**: Hardware PWM for precise timing and reduced CPU overhead
 - **High frequency (1MHz)**: Hardware PWM for accuracy
 
 ### ADC Resolution
