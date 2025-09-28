@@ -18,19 +18,7 @@
 #include "hardware/uart.h"
 #include "hardware/timer.h"
 #include "hardware/pwm.h"
-
-// Pin definitions
-#define BUTTON_SINGLE_STEP  2   // Button 1: Single step mode
-#define BUTTON_LOW_FREQ     3   // Button 2: Low frequency mode  
-#define BUTTON_HIGH_FREQ    4   // Button 3: High frequency mode
-
-#define LED_CLOCK_ACTIVITY  5   // Clock activity indicator
-#define LED_SINGLE_STEP     6   // Single step mode indicator
-#define LED_LOW_FREQ        7   // Low frequency mode indicator  
-#define LED_HIGH_FREQ       8   // High frequency mode indicator
-
-#define CLOCK_OUTPUT        9   // Main clock output pin
-#define POTENTIOMETER_PIN   26  // ADC0 - Potentiometer input (GPIO 26)
+#include "config.h"
 
 // Clock modes
 typedef enum {
@@ -47,7 +35,6 @@ static bool single_step_active = false;
 
 // Button debouncing
 static uint32_t last_button_time[3] = {0, 0, 0};
-static const uint32_t DEBOUNCE_DELAY_MS = 50;
 
 // Timer for low frequency mode
 static struct repeating_timer low_freq_timer;
@@ -92,7 +79,7 @@ int main() {
             update_low_frequency();
         }
         
-        sleep_ms(10); // Small delay to prevent excessive polling
+        sleep_ms(UPDATE_INTERVAL_MS); // Small delay to prevent excessive polling
     }
     
     return 0;
@@ -201,7 +188,7 @@ void set_mode(clock_mode_t mode) {
             break;
             
         case MODE_HIGH_FREQ:
-            current_frequency = 1000000; // 1MHz
+            current_frequency = HIGH_FREQ_OUTPUT; // 1MHz
             start_high_frequency();
             break;
     }
@@ -273,13 +260,13 @@ uint32_t calculate_frequency_from_pot(uint16_t adc_value) {
     // ADC is 12-bit, so values range from 0 to 4095
     float pot_position = (float)adc_value / 4095.0f;
     
-    if (pot_position <= 0.2f) {
-        // First 20%: 1Hz to 100Hz linear
-        return (uint32_t)(1 + (pot_position / 0.2f) * 99);
+    if (pot_position <= POT_RANGE1_PERCENT) {
+        // First 20%: MIN_LOW_FREQ to MAX_LOW_FREQ_RANGE1 linear
+        return (uint32_t)(MIN_LOW_FREQ + (pot_position / POT_RANGE1_PERCENT) * (MAX_LOW_FREQ_RANGE1 - MIN_LOW_FREQ));
     } else {
-        // Remaining 80%: 100Hz to 100kHz
-        float remaining_position = (pot_position - 0.2f) / 0.8f;
-        return (uint32_t)(100 + remaining_position * 99900);
+        // Remaining 80%: MAX_LOW_FREQ_RANGE1 to MAX_LOW_FREQ_RANGE2
+        float remaining_position = (pot_position - POT_RANGE1_PERCENT) / POT_RANGE2_PERCENT;
+        return (uint32_t)(MAX_LOW_FREQ_RANGE1 + remaining_position * (MAX_LOW_FREQ_RANGE2 - MAX_LOW_FREQ_RANGE1));
     }
 }
 
@@ -289,15 +276,18 @@ bool low_freq_timer_callback(struct repeating_timer *t) {
 }
 
 void start_high_frequency(void) {
+    // Set GPIO function to PWM
+    gpio_set_function(CLOCK_OUTPUT, GPIO_FUNC_PWM);
+    
     // Use PWM to generate 1MHz square wave
     uint slice_num = pwm_gpio_to_slice_num(CLOCK_OUTPUT);
     
     // Set PWM frequency to 1MHz with 50% duty cycle
     // System clock is typically 125MHz
     // For 1MHz: divider = 125, wrap = 1 (gives 125MHz / 125 / 1 = 1MHz)
-    pwm_set_clkdiv(slice_num, 125.0f);
-    pwm_set_wrap(slice_num, 1);
-    pwm_set_chan_level(slice_num, PWM_CHAN_A, 1); // 50% duty cycle
+    pwm_set_clkdiv(slice_num, PWM_CLOCK_DIVIDER);
+    pwm_set_wrap(slice_num, PWM_WRAP_VALUE);
+    pwm_set_chan_level(slice_num, PWM_CHAN_A, PWM_DUTY_CYCLE); // 50% duty cycle
     
     // Enable PWM
     pwm_set_enabled(slice_num, true);
@@ -309,6 +299,12 @@ void start_high_frequency(void) {
 void stop_high_frequency(void) {
     uint slice_num = pwm_gpio_to_slice_num(CLOCK_OUTPUT);
     pwm_set_enabled(slice_num, false);
+    
+    // Reset GPIO function back to SIO (software controlled)
+    gpio_set_function(CLOCK_OUTPUT, GPIO_FUNC_SIO);
+    gpio_set_dir(CLOCK_OUTPUT, GPIO_OUT);
+    gpio_put(CLOCK_OUTPUT, 0);
+    
     gpio_put(LED_CLOCK_ACTIVITY, 0);
 }
 
