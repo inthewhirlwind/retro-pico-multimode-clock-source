@@ -38,23 +38,40 @@ A versatile multi-mode clock generator for retro computing applications using a 
 
 ### User Interface
 
-- **3 Push Buttons**:
+- **4 Push Buttons**:
   - Button 1: Single Step Mode toggle/selection
   - Button 2: Low-Frequency Mode selection
   - Button 3: High-Frequency Mode selection
-  - **Hold any button for 3 seconds**: Enter UART Control Mode
-- **5 LED Indicators**:
+  - Button 4: Reset pulse trigger (positive edge triggered)
+  - **Hold any of first 3 buttons for 3 seconds**: Enter UART Control Mode
+- **7 LED Indicators**:
   - Clock activity LED (shows current clock state)
   - Mode indicator LEDs (one for each mode including UART mode)
+  - Reset state LEDs:
+    - Reset Low LED: On when reset output is low (during reset pulse)
+    - Reset High LED: On for 250ms when reset pulse completes
 - **UART Output**: Real-time mode and frequency information
 - **UART Input**: Interactive command interface in UART Control Mode
 - **Potentiometer**: Frequency control for Low-Frequency Mode
 
+### Reset Pulse Functionality
+
+The reset functionality provides a hardware reset signal that can be used to reset target circuits:
+
+- **Reset Button**: Debounced positive edge trigger initiates reset pulse
+- **Reset Output**: GPIO pin that is normally high, goes low during reset pulse
+- **Reset Behavior**:
+  - **Modes 2, 3, 4** (Low-Freq, High-Freq, UART): Reset output goes low for the duration of 6 clock cycles, then returns high
+  - **Mode 1** (Single Step): Reset output goes low and tracks manual clock transitions, returning high after 6 low-to-high transitions
+- **Visual Indication**:
+  - Reset Low LED illuminates when reset output is active (low)
+  - Reset High LED illuminates for 250ms when reset pulse completes
+
 ## Hardware Requirements
 
 - Raspberry Pi Pico (or Pico W)
-- 3 Push buttons (momentary, normally open)
-- 5 LEDs with appropriate current-limiting resistors (220Ω recommended)
+- 4 Push buttons (momentary, normally open)
+- 7 LEDs with appropriate current-limiting resistors (220Ω recommended)
 - 1 Potentiometer (10kΩ recommended)
 - Breadboard and jumper wires
 - 3.3V pull-up resistors for buttons (optional, internal pull-ups used)
@@ -66,12 +83,16 @@ A versatile multi-mode clock generator for retro computing applications using a 
 | Button 1 (Single Step) | GPIO 2 | Single step mode button |
 | Button 2 (Low Freq) | GPIO 3 | Low frequency mode button |
 | Button 3 (High Freq) | GPIO 4 | High frequency mode button |
+| Button 4 (Reset) | GPIO 11 | Reset pulse trigger button |
 | Clock Activity LED | GPIO 5 | Shows clock output state |
 | Single Step Mode LED | GPIO 6 | Single step mode indicator |
 | Low Freq Mode LED | GPIO 7 | Low frequency mode indicator |
 | High Freq Mode LED | GPIO 8 | High frequency mode indicator |
 | UART Mode LED | GPIO 10 | UART control mode indicator |
+| Reset Low LED | GPIO 12 | Reset state indicator (on when reset output is low) |
+| Reset High LED | GPIO 13 | Reset complete indicator (on for 250ms after reset) |
 | Clock Output | GPIO 9 | Main clock signal output |
+| Reset Output | GPIO 14 | Reset pulse output (normally high, low during reset) |
 | UART1 TX | GPIO 16 | Second UART transmit (status output) |
 | UART1 RX | GPIO 17 | Second UART receive (not used) |
 | Potentiometer | GPIO 26 (ADC0) | Frequency control input |

@@ -6,15 +6,15 @@ This document provides comprehensive wiring instructions for the Multimode Clock
 
 ### Required Components
 - 1x Raspberry Pi Pico
-- 3x Push buttons (momentary, normally open)
-- 5x LEDs (any color, 3mm or 5mm)
-- 5x 220Ω resistors (for LED current limiting)
+- 4x Push buttons (momentary, normally open)
+- 7x LEDs (any color, 3mm or 5mm)
+- 7x 220Ω resistors (for LED current limiting)
 - 1x 10kΩ potentiometer (linear taper)
 - 1x Breadboard (half-size or larger)
 - Jumper wires (male-to-male)
 
 ### Optional Components
-- 3x 10kΩ resistors (external pull-ups for buttons - not needed as internal pull-ups are used)
+- 4x 10kΩ resistors (external pull-ups for buttons - not needed as internal pull-ups are used)
 - 1x Logic level converter (if interfacing with 5V systems)
 
 ## Pin Assignment Summary
@@ -24,12 +24,16 @@ This document provides comprehensive wiring instructions for the Multimode Clock
 | Button 1 (Single Step) | GPIO 2 | Pin 4 | Button to GND |
 | Button 2 (Low Freq) | GPIO 3 | Pin 5 | Button to GND |
 | Button 3 (High Freq) | GPIO 4 | Pin 6 | Button to GND |
+| Button 4 (Reset) | GPIO 11 | Pin 15 | Button to GND |
 | Clock Activity LED | GPIO 5 | Pin 7 | LED + 220Ω resistor to GND |
 | Single Step LED | GPIO 6 | Pin 9 | LED + 220Ω resistor to GND |
 | Low Freq LED | GPIO 7 | Pin 10 | LED + 220Ω resistor to GND |
 | High Freq LED | GPIO 8 | Pin 11 | LED + 220Ω resistor to GND |
 | UART Mode LED | GPIO 10 | Pin 14 | LED + 220Ω resistor to GND |
+| Reset Low LED | GPIO 12 | Pin 16 | LED + 220Ω resistor to GND |
+| Reset High LED | GPIO 13 | Pin 17 | LED + 220Ω resistor to GND |
 | Clock Output | GPIO 9 | Pin 12 | To target circuit |
+| Reset Output | GPIO 14 | Pin 19 | To target circuit |
 | UART1 TX | GPIO 16 | Pin 21 | To external UART RX |
 | UART1 RX | GPIO 17 | Pin 22 | To external UART TX |
 | Potentiometer | GPIO 26 (ADC0) | Pin 31 | Center pin |
@@ -43,7 +47,7 @@ This document provides comprehensive wiring instructions for the Multimode Clock
 2. Connect any GND pin (Pin 3, 8, 13, etc.) to the negative power rail on your breadboard
 
 ### Step 2: Push Buttons
-For each of the three buttons:
+For each of the four buttons:
 
 **Button 1 (Single Step Mode):**
 1. Place button on breadboard
@@ -58,6 +62,11 @@ For each of the three buttons:
 **Button 3 (High Frequency Mode):**
 1. Place button on breadboard
 2. Connect one terminal to GPIO 4 (Pin 6) with a jumper wire
+3. Connect the other terminal to the ground rail
+
+**Button 4 (Reset):**
+1. Place button on breadboard
+2. Connect one terminal to GPIO 11 (Pin 15) with a jumper wire
 3. Connect the other terminal to the ground rail
 
 ### Step 3: LED Indicators
@@ -88,14 +97,27 @@ For each LED, connect as follows:
 2. Connect the other end of the resistor to GPIO 10 (Pin 14)
 3. Connect LED cathode (short leg) to the ground rail
 
+**Reset Low LED:**
+1. Connect LED anode (long leg) to one end of a 220Ω resistor
+2. Connect the other end of the resistor to GPIO 12 (Pin 16)
+3. Connect LED cathode (short leg) to the ground rail
+
+**Reset High LED:**
+1. Connect LED anode (long leg) to one end of a 220Ω resistor
+2. Connect the other end of the resistor to GPIO 13 (Pin 17)
+3. Connect LED cathode (short leg) to the ground rail
+
 ### Step 4: Potentiometer
 1. Connect the center pin (wiper) of the potentiometer to GPIO 26 (Pin 31)
 2. Connect one outer pin to the positive power rail (3.3V)
 3. Connect the other outer pin to the ground rail
 
-### Step 5: Clock Output
+### Step 5: Clock and Reset Outputs
 1. Connect GPIO 9 (Pin 12) to your target circuit's clock input
-2. If interfacing with 5V logic, use a logic level converter
+2. Connect GPIO 14 (Pin 19) to your target circuit's reset input
+3. If interfacing with 5V logic, use a logic level converter for both signals
+
+**Important**: The reset output is normally high (3.3V) and goes low during reset pulses. Ensure your target circuit expects this logic level.
 
 ### Step 6: Second UART Output (Optional)
 1. Connect GPIO 16 (Pin 21) to the receive (RX) pin of your external UART device
@@ -196,6 +218,28 @@ For each LED, connect as follows:
 - Use ground plane for signal integrity
 - Consider impedance matching for high frequencies
 - Add termination resistors if needed
+
+## Reset Functionality Usage
+
+The reset pulse functionality provides a hardware reset signal for your target circuit:
+
+### Reset Signal Characteristics
+- **Idle State**: Reset output is HIGH (3.3V)
+- **Reset State**: Reset output goes LOW during reset pulse
+- **Duration**: 6 clock cycles in automatic modes, manual control in single-step mode
+
+### Reset Behavior by Mode
+- **Single Step Mode (Mode 1)**: Press reset button, then manually step through 6 clock transitions
+- **Low/High/UART Modes (Modes 2-4)**: Press reset button for automatic 6-cycle reset pulse
+
+### Reset LED Indicators  
+- **Reset Low LED**: Illuminates when reset output is active (LOW)
+- **Reset High LED**: Briefly illuminates (250ms) when reset pulse completes
+
+### Integration with Target Circuits
+- Connect Reset Output (GPIO 14) to your target's reset input
+- Ensure target circuit expects active-low reset (reset when signal is LOW)
+- Use logic level converter if target requires 5V logic levels
 
 ## Final Verification
 
