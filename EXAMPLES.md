@@ -77,6 +77,34 @@ To verify potentiometer frequency mapping:
 4. Turn pot fully clockwise → should read ~100kHz
 5. Verify smooth transitions across the range
 
+## Example 5: Dual UART Monitoring
+
+The device outputs status information simultaneously to both UART interfaces:
+
+### USB CDC (Primary UART)
+1. Connect Pico to computer via USB
+2. Open serial terminal at 115200 baud
+3. Monitor real-time status updates
+
+### Hardware UART1 (Secondary UART) 
+1. Connect GPIO 16 (TX) to external UART receiver
+2. Connect GPIO 17 (RX) if bidirectional communication needed
+3. Configure external device: 115200 baud, 8N1
+4. Both UARTs show identical output:
+
+**External Device Connection:**
+```
+Pico GPIO 16 (TX) ────→ External UART RX
+Pico GPIO 17 (RX) ────→ External UART TX (optional)
+Pico GND         ────→ External UART GND
+```
+
+**Example Use Cases:**
+- Data logging to external microcontroller
+- Remote monitoring via RS232/RS485 converter
+- Standalone operation without USB connection
+- Dual redundant status output
+
 ## Interfacing Examples
 
 ### 3.3V Logic Interface
@@ -118,3 +146,11 @@ GND         ────→ Scope ground
 - LED 8 is lit (confirming High-Frequency Mode)  
 - Clock Activity LED is on
 - Use oscilloscope to verify 1MHz square wave on GPIO 9
+
+### Problem: No output on second UART (GPIO 16)
+**Check:**
+- GPIO 16 connection to external UART RX pin
+- External UART configured for 115200 baud, 8 data bits, 1 stop bit, no parity
+- Common ground connection between Pico and external device
+- External UART device is powered and functioning
+- USB CDC output working (indicates main system is functional)
