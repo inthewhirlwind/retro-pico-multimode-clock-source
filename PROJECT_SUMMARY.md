@@ -10,7 +10,7 @@ This repository contains a complete implementation of a Raspberry Pi Pico-based 
 - **Single Step Mode**: Manual button-triggered clock with debouncing
 - **Low-Frequency Mode**: Variable 1Hz-100kHz with dual-range potentiometer control
 - **High-Frequency Mode**: Precise 1MHz PWM square wave
-- **UART Control Mode**: Interactive command-driven frequency control (1Hz-1MHz)
+- **UART Control Mode**: Interactive command-driven frequency control (10Hz-1MHz)
 
 ### ✅ User Interface  
 - **3 Push Buttons**: Debounced mode selection and step control
@@ -67,7 +67,7 @@ multimode_clock_source/
 - [x] Hold any button for 3 seconds to enter mode
 - [x] Interactive command interface via UART
 - [x] Commands: stop, toggle, freq <Hz>, menu, status
-- [x] Frequency range 1Hz to 1MHz
+- [x] Frequency range 10Hz to 1MHz
 - [x] 30-second timeout returns to previous mode
 - [x] Any button press returns to previous mode
 - [x] Dedicated LED indicator (GPIO 10)

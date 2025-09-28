@@ -5,7 +5,7 @@
  * - Single Step Mode: Manual clock toggle with button
  * - Low-Frequency Mode: 1Hz-100Hz (20% pot) and 100Hz-100kHz (80% pot)  
  * - High-Frequency Mode: Fixed 1MHz output
- * - UART Control Mode: UART-controlled frequency from 1Hz to 1MHz
+ * - UART Control Mode: UART-controlled frequency from 10Hz to 1MHz
  * - LED indicators for each mode
  * - UART output for status display
  */
@@ -41,8 +41,11 @@ static uint32_t last_button_time[3] = {0, 0, 0};
 
 // Timer for low frequency mode and UART mode
 static struct repeating_timer low_freq_timer;
-static struct repeating_timer uart_freq_timer;
 static bool timer_active = false;
+
+// Hardware timer for UART mode
+static alarm_id_t uart_alarm_id = 0;
+static uint32_t uart_half_period_us = 0;
 static bool uart_timer_active = false;
 
 // UART control mode variables
@@ -67,7 +70,7 @@ void update_low_frequency(void);
 void start_high_frequency(void);
 void stop_high_frequency(void);
 bool low_freq_timer_callback(struct repeating_timer *t);
-bool uart_freq_timer_callback(struct repeating_timer *t);
+int64_t uart_hardware_timer_callback(alarm_id_t id, void *user_data);
 void print_status(void);
 void print_status_to_uart1(void);
 uint32_t calculate_frequency_from_pot(uint16_t adc_value);
@@ -249,8 +252,9 @@ void set_mode(clock_mode_t mode) {
         timer_active = false;
     }
     if (uart_timer_active) {
-        cancel_repeating_timer(&uart_freq_timer);
+        cancel_alarm(uart_alarm_id);
         uart_timer_active = false;
+        uart_alarm_id = 0;
     }
     stop_high_frequency();
     stop_uart_frequency();
@@ -494,9 +498,10 @@ void print_status(void) {
     print_status_to_uart1();
 }
 
-bool uart_freq_timer_callback(struct repeating_timer *t) {
+int64_t uart_hardware_timer_callback(alarm_id_t id, void *user_data) {
     toggle_clock_output();
-    return true; // Continue repeating
+    // Return the period for the next alarm (in microseconds)
+    return uart_half_period_us;
 }
 
 void handle_uart_control(void) {
@@ -624,24 +629,28 @@ void start_uart_frequency(uint32_t frequency) {
     stop_uart_frequency(); // Stop any existing timer
     
     if (frequency > 0 && frequency <= MAX_UART_FREQ) {
-        // Calculate half period in microseconds
-        // For very high frequencies, ensure we don't overflow or get too small periods
-        if (frequency > 100000) { // Above 100kHz, use minimum safe period
-            uint32_t period_us = 500000 / frequency;
-            if (period_us < 1) period_us = 1; // Minimum 1 microsecond
-            add_repeating_timer_us(-period_us, uart_freq_timer_callback, NULL, &uart_freq_timer);
-        } else {
-            uint32_t period_us = 500000 / frequency; // Half period in microseconds
-            add_repeating_timer_us(-period_us, uart_freq_timer_callback, NULL, &uart_freq_timer);
+        // Calculate half period in microseconds for hardware timer
+        uart_half_period_us = 500000 / frequency; // Half period in microseconds
+        
+        // Ensure minimum period for hardware timer (at least 1 microsecond)
+        if (uart_half_period_us < 1) {
+            uart_half_period_us = 1;
         }
-        uart_timer_active = true;
+        
+        // Set up hardware timer alarm
+        uart_alarm_id = add_alarm_in_us(uart_half_period_us, uart_hardware_timer_callback, NULL, false);
+        
+        if (uart_alarm_id > 0) {
+            uart_timer_active = true;
+        }
     }
 }
 
 void stop_uart_frequency(void) {
-    if (uart_timer_active) {
-        cancel_repeating_timer(&uart_freq_timer);
+    if (uart_timer_active && uart_alarm_id > 0) {
+        cancel_alarm(uart_alarm_id);
         uart_timer_active = false;
+        uart_alarm_id = 0;
     }
 }
 

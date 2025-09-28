@@ -78,7 +78,7 @@ Use UART Control Mode for programmatic clock control:
 Commands:
   stop      - Stop the clock
   toggle    - Toggle clock state once
-  freq <Hz> - Set frequency (1Hz to 1MHz) and run
+  freq <Hz> - Set frequency (10Hz to 1MHz) and run
   menu      - Show this menu again
   status    - Show current status
 
