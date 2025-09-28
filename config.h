@@ -16,6 +16,7 @@
 #define LED_SINGLE_STEP     6   // Single step mode indicator
 #define LED_LOW_FREQ        7   // Low frequency mode indicator  
 #define LED_HIGH_FREQ       8   // High frequency mode indicator
+#define LED_UART_MODE       10  // UART control mode indicator
 
 #define CLOCK_OUTPUT        9   // Main clock output pin
 #define POTENTIOMETER_PIN   26  // ADC0 - Potentiometer input (GPIO 26)
@@ -41,6 +42,12 @@
 
 // UART Configuration
 #define UART_BAUD_RATE      115200  // UART baud rate for status output
+
+// UART Control Mode Configuration
+#define UART_MENU_TIMEOUT_MS    30000   // Menu timeout in milliseconds (30 seconds)
+#define UART_CMD_BUFFER_SIZE    32      // Command buffer size
+#define MIN_UART_FREQ           1       // Minimum frequency for UART mode (1Hz)
+#define MAX_UART_FREQ           1000000 // Maximum frequency for UART mode (1MHz)
 
 // Second UART Configuration
 #define UART1_TX_PIN        16      // UART1 TX pin (GPIO 16)
