@@ -59,6 +59,7 @@ static bool uart_pwm_active = false;
 static bool reset_active = false;
 static bool reset_output_state = true; // Reset output is normally high
 static uint32_t reset_cycle_count = 0;
+static uint32_t reset_start_time = 0;
 static uint32_t reset_high_led_timer = 0;
 static bool reset_waiting_for_edge = false; // For Mode 1 edge detection
 static bool last_clock_state_for_reset = false;
@@ -779,10 +780,11 @@ void handle_reset_button(void) {
 void start_reset_pulse(void) {
     reset_active = true;
     reset_cycle_count = 0;
+    reset_start_time = to_ms_since_boot(get_absolute_time());
     reset_waiting_for_edge = (current_mode == MODE_SINGLE_STEP); // Mode 1 needs edge detection
     last_clock_state_for_reset = clock_state;
     set_reset_output(false); // Start reset pulse (low)
-    printf("Reset pulse started, mode: %d\n", current_mode);
+    printf("Reset pulse started, mode: %d\n", current_mode + 1);
 }
 
 void update_reset_state(void) {
@@ -804,30 +806,27 @@ void update_reset_state(void) {
         }
         last_clock_state_for_reset = clock_state;
     } else {
-        // Modes 2, 3, 4: Count actual clock cycles
-        // This is more complex as we need to hook into the clock generation
-        // For now, we'll use a simpler approach with timing estimation
-        static uint32_t reset_start_time = 0;
-        if (reset_cycle_count == 0) {
-            reset_start_time = to_ms_since_boot(get_absolute_time());
-            reset_cycle_count = 1; // Mark that timing has started
-        }
-        
+        // Modes 2, 3, 4: Count actual clock cycles using timing
         uint32_t elapsed_ms = to_ms_since_boot(get_absolute_time()) - reset_start_time;
         uint32_t required_ms = 0;
         
         // Calculate required time based on current frequency
         if (current_mode == MODE_LOW_FREQ && current_frequency > 0) {
+            // For low frequency mode, use current frequency
             required_ms = (RESET_CYCLES * 1000) / current_frequency;
         } else if (current_mode == MODE_HIGH_FREQ) {
+            // For high frequency mode, use fixed 1MHz
             required_ms = (RESET_CYCLES * 1000) / HIGH_FREQ_OUTPUT;
+            if (required_ms == 0) required_ms = 1; // Minimum 1ms for visibility
         } else if (current_mode == MODE_UART_CONTROL && uart_set_frequency > 0) {
+            // For UART control mode, use set frequency
             required_ms = (RESET_CYCLES * 1000) / uart_set_frequency;
         } else {
-            required_ms = 60; // Default fallback (100ms for 6 cycles at 60 Hz)
+            // Fallback for any undefined states
+            required_ms = 60; // Default 60ms (approximately 100Hz for 6 cycles)
         }
         
-        // Ensure minimum time for visibility
+        // Ensure minimum time for visibility (at least 10ms)
         if (required_ms < 10) required_ms = 10;
         
         if (elapsed_ms >= required_ms) {
