@@ -5,7 +5,7 @@
  * - Single Step Mode: Manual clock toggle with button
  * - Low-Frequency Mode: 1Hz-100Hz (20% pot) and 100Hz-100kHz (80% pot)  
  * - High-Frequency Mode: Fixed 1MHz output
- * - UART Control Mode: UART-controlled frequency from 1Hz to 1MHz
+ * - UART Control Mode: UART-controlled frequency from 10Hz to 1MHz
  * - LED indicators for each mode
  * - UART output for status display
  */
