@@ -40,13 +40,16 @@
 #define PWM_WRAP_VALUE      1       // PWM wrap value
 #define PWM_DUTY_CYCLE      1       // 50% duty cycle (1 out of 2)
 
+// PWM Configuration for UART Control Mode
+#define UART_PWM_DUTY_CYCLE_PERCENT 50  // 50% duty cycle for UART PWM mode
+
 // UART Configuration
 #define UART_BAUD_RATE      115200  // UART baud rate for status output
 
 // UART Control Mode Configuration
 #define UART_MENU_TIMEOUT_MS    30000   // Menu timeout in milliseconds (30 seconds)
 #define UART_CMD_BUFFER_SIZE    32      // Command buffer size
-#define MIN_UART_FREQ           10      // Minimum frequency for UART mode (10Hz)
+#define MIN_UART_FREQ           1       // Minimum frequency for UART mode (1Hz)
 #define MAX_UART_FREQ           1000000 // Maximum frequency for UART mode (1MHz)
 
 // Second UART Configuration

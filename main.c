@@ -43,9 +43,8 @@ static uint32_t last_button_time[3] = {0, 0, 0};
 static struct repeating_timer low_freq_timer;
 static bool timer_active = false;
 
-// Hardware timer for UART mode
+// Hardware timer for UART mode (legacy - kept for compatibility during transition)
 static alarm_id_t uart_alarm_id = 0;
-static uint32_t uart_half_period_us = 0;
 static bool uart_timer_active = false;
 
 // UART control mode variables
@@ -54,6 +53,7 @@ static uint32_t uart_set_frequency = 0;
 static char uart_cmd_buffer[UART_CMD_BUFFER_SIZE];
 static uint8_t uart_cmd_index = 0;
 static uint32_t uart_menu_timeout = 0;
+static bool uart_pwm_active = false;
 
 // Function prototypes
 void init_gpio(void);
@@ -70,7 +70,6 @@ void update_low_frequency(void);
 void start_high_frequency(void);
 void stop_high_frequency(void);
 bool low_freq_timer_callback(struct repeating_timer *t);
-int64_t uart_hardware_timer_callback(alarm_id_t id, void *user_data);
 void print_status(void);
 void print_status_to_uart1(void);
 uint32_t calculate_frequency_from_pot(uint16_t adc_value);
@@ -79,6 +78,8 @@ void show_uart_menu(void);
 void process_uart_command(const char* cmd);
 void start_uart_frequency(uint32_t frequency);
 void stop_uart_frequency(void);
+void start_uart_pwm(uint32_t frequency);
+void stop_uart_pwm(void);
 bool any_button_pressed(void);
 
 int main() {
@@ -257,7 +258,7 @@ void set_mode(clock_mode_t mode) {
         uart_alarm_id = 0;
     }
     stop_high_frequency();
-    stop_uart_frequency();
+    stop_uart_frequency(); // This now handles both timer and PWM cleanup
     
     current_mode = mode;
     single_step_active = false;
@@ -451,7 +452,11 @@ void print_status_to_uart1(void) {
     }
     
     // Clock state
-    if (clock_state) {
+    if (current_mode == MODE_UART_CONTROL && uart_pwm_active) {
+        uart_puts(uart1, "Clock State: PWM Active\n");
+    } else if (current_mode == MODE_HIGH_FREQ) {
+        uart_puts(uart1, "Clock State: PWM Active\n");
+    } else if (clock_state) {
         uart_puts(uart1, "Clock State: HIGH\n");
     } else {
         uart_puts(uart1, "Clock State: LOW\n");
@@ -491,17 +496,14 @@ void print_status(void) {
             break;
     }
     
-    printf("Clock State: %s\n", clock_state ? "HIGH" : "LOW");
+    printf("Clock State: %s\n", 
+           (current_mode == MODE_UART_CONTROL && uart_pwm_active) ? "PWM Active" :
+           (current_mode == MODE_HIGH_FREQ) ? "PWM Active" :
+           (clock_state ? "HIGH" : "LOW"));
     printf("===========================\n\n");
     
     // Also send status to second UART
     print_status_to_uart1();
-}
-
-int64_t uart_hardware_timer_callback(alarm_id_t id, void *user_data) {
-    toggle_clock_output();
-    // Return the period for the next alarm (in microseconds)
-    return uart_half_period_us;
 }
 
 void handle_uart_control(void) {
@@ -577,10 +579,10 @@ void process_uart_command(const char* cmd) {
         printf("Clock stopped\n");
         
     } else if (strcmp(cmd, "toggle") == 0) {
+        stop_uart_frequency(); // Stop any running PWM or timer
         toggle_clock_output();
         printf("Clock toggled to %s\n", clock_state ? "HIGH" : "LOW");
         uart_clock_running = false; // Stop any running frequency
-        stop_uart_frequency();
         
     } else if (strncmp(cmd, "freq ", 5) == 0) {
         const char* freq_str = cmd + 5;
@@ -626,31 +628,93 @@ void process_uart_command(const char* cmd) {
 }
 
 void start_uart_frequency(uint32_t frequency) {
-    stop_uart_frequency(); // Stop any existing timer
+    stop_uart_frequency(); // Stop any existing timer or PWM
     
     if (frequency > 0 && frequency <= MAX_UART_FREQ) {
-        // Calculate half period in microseconds for hardware timer
-        uart_half_period_us = 500000 / frequency; // Half period in microseconds
-        
-        // Ensure minimum period for hardware timer (at least 1 microsecond)
-        if (uart_half_period_us < 1) {
-            uart_half_period_us = 1;
-        }
-        
-        // Set up hardware timer alarm
-        uart_alarm_id = add_alarm_in_us(uart_half_period_us, uart_hardware_timer_callback, NULL, false);
-        
-        if (uart_alarm_id > 0) {
-            uart_timer_active = true;
-        }
+        start_uart_pwm(frequency);
     }
 }
 
 void stop_uart_frequency(void) {
+    // Stop hardware timer if active
     if (uart_timer_active && uart_alarm_id > 0) {
         cancel_alarm(uart_alarm_id);
         uart_timer_active = false;
         uart_alarm_id = 0;
+    }
+    // Stop PWM if active
+    stop_uart_pwm();
+}
+
+void start_uart_pwm(uint32_t frequency) {
+    stop_uart_pwm(); // Stop any existing PWM
+    
+    if (frequency > 0 && frequency <= MAX_UART_FREQ) {
+        // Set GPIO function to PWM
+        gpio_set_function(CLOCK_OUTPUT, GPIO_FUNC_PWM);
+        
+        // Get PWM slice for this GPIO
+        uint slice_num = pwm_gpio_to_slice_num(CLOCK_OUTPUT);
+        
+        // Calculate PWM parameters for the desired frequency
+        // System clock is typically 125MHz
+        // We want: PWM_freq = sys_clock / (divider * (wrap + 1))
+        // For 50% duty cycle, we set level = wrap / 2
+        
+        float sys_clock = 125000000.0f; // 125MHz system clock
+        float target_freq = (float)frequency;
+        
+        // Start with a reasonable wrap value to get good resolution
+        uint16_t wrap = 1000; // This gives us good resolution for duty cycle
+        float divider = sys_clock / (target_freq * (wrap + 1));
+        
+        // If divider is too high, reduce wrap and recalculate
+        if (divider > 255.0f) {
+            wrap = (uint16_t)(sys_clock / (target_freq * 255.0f)) - 1;
+            if (wrap < 1) wrap = 1;
+            divider = sys_clock / (target_freq * (wrap + 1));
+        }
+        
+        // If divider is too low (less than 1), increase wrap and recalculate
+        if (divider < 1.0f) {
+            wrap = (uint16_t)(sys_clock / target_freq) - 1;
+            if (wrap > 65535) wrap = 65535; // Max 16-bit value
+            divider = 1.0f; // Minimum divider
+        }
+        
+        // Ensure minimum wrap for 50% duty cycle
+        if (wrap < 2) wrap = 2;
+        
+        // Set PWM configuration
+        pwm_set_clkdiv(slice_num, divider);
+        pwm_set_wrap(slice_num, wrap);
+        
+        // Set 50% duty cycle
+        uint16_t duty_level = wrap / 2;
+        uint channel = pwm_gpio_to_channel(CLOCK_OUTPUT);
+        pwm_set_chan_level(slice_num, channel, duty_level);
+        
+        // Enable PWM
+        pwm_set_enabled(slice_num, true);
+        uart_pwm_active = true;
+        
+        // Set clock activity LED on
+        gpio_put(LED_CLOCK_ACTIVITY, 1);
+    }
+}
+
+void stop_uart_pwm(void) {
+    if (uart_pwm_active) {
+        uint slice_num = pwm_gpio_to_slice_num(CLOCK_OUTPUT);
+        pwm_set_enabled(slice_num, false);
+        
+        // Reset GPIO function back to SIO (software controlled)
+        gpio_set_function(CLOCK_OUTPUT, GPIO_FUNC_SIO);
+        gpio_set_dir(CLOCK_OUTPUT, GPIO_OUT);
+        gpio_put(CLOCK_OUTPUT, 0);
+        
+        uart_pwm_active = false;
+        gpio_put(LED_CLOCK_ACTIVITY, 0);
     }
 }
 
