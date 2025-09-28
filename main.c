@@ -280,34 +280,39 @@ void calculate_pwm_params(uint32_t frequency, float *clkdiv, uint16_t *wrap, uin
     // output_frequency = system_clock_hz / clkdiv / (wrap + 1)
     // We want 50% duty cycle, so level = wrap / 2
     
-    // For lower frequencies, we need higher wrap values for better resolution
-    // Start with a reasonable wrap value and calculate the required clock divider
-    
-    if (frequency >= 1000) {
-        // For frequencies >= 1kHz, use smaller wrap values
+    // Hardware limitation: PWM minimum frequency is ~7.5Hz due to 16-bit wrap limit
+    // For frequencies below 8Hz, we use the closest achievable frequency
+    if (frequency < 8) {
+        // Use maximum divider and wrap for lowest possible frequency (~7.5Hz)
+        *clkdiv = 255.0f;
+        *wrap = 65535; // Maximum 16-bit value
+        *level = *wrap / 2;
+    } else if (frequency < 1000) {
+        // For frequencies 8Hz-1kHz, optimize for accuracy using max divider
+        *clkdiv = 255.0f;
+        *wrap = (system_clock_hz / (255 * frequency)) - 1;
+        
+        // Ensure wrap doesn't exceed 16-bit limit
+        if (*wrap > 65535) {
+            *wrap = 65535;
+        }
+        
+        *level = *wrap / 2;
+    } else {
+        // For frequencies >= 1kHz, use smaller wrap values for better resolution
         *wrap = 124; // This gives us good resolution
         *clkdiv = (float)system_clock_hz / (frequency * (*wrap + 1));
-    } else {
-        // For frequencies < 1kHz, use larger wrap values for better precision
-        *wrap = 1249; // This gives us very good resolution for low frequencies
-        *clkdiv = (float)system_clock_hz / (frequency * (*wrap + 1));
+        
+        // Ensure clkdiv is within valid range
+        if (*clkdiv < 1.0f) {
+            *clkdiv = 1.0f;
+            // Recalculate wrap for the minimum clock divider
+            *wrap = (system_clock_hz / frequency) - 1;
+            if (*wrap > 65535) *wrap = 65535; // PWM wrap is 16-bit
+        }
+        
+        *level = *wrap / 2;
     }
-    
-    // Ensure clkdiv is within valid range (1.0 to 255.0)
-    if (*clkdiv < 1.0f) {
-        *clkdiv = 1.0f;
-        // Recalculate wrap for the minimum clock divider
-        *wrap = (system_clock_hz / frequency) - 1;
-        if (*wrap > 65535) *wrap = 65535; // PWM wrap is 16-bit
-    } else if (*clkdiv > 255.0f) {
-        *clkdiv = 255.0f;
-        // Recalculate wrap for the maximum clock divider  
-        *wrap = (system_clock_hz / (255 * frequency)) - 1;
-        if (*wrap > 65535) *wrap = 65535; // PWM wrap is 16-bit
-    }
-    
-    // Set 50% duty cycle
-    *level = *wrap / 2;
 }
 
 void start_low_frequency(uint32_t frequency) {
