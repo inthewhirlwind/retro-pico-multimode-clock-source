@@ -29,6 +29,8 @@ This document provides comprehensive wiring instructions for the Multimode Clock
 | Low Freq LED | GPIO 7 | Pin 10 | LED + 220Ω resistor to GND |
 | High Freq LED | GPIO 8 | Pin 11 | LED + 220Ω resistor to GND |
 | Clock Output | GPIO 9 | Pin 12 | To target circuit |
+| UART1 TX | GPIO 16 | Pin 21 | To external UART RX |
+| UART1 RX | GPIO 17 | Pin 22 | To external UART TX |
 | Potentiometer | GPIO 26 (ADC0) | Pin 31 | Center pin |
 | 3.3V Power | 3V3(OUT) | Pin 36 | To potentiometer and breadboard power rail |
 | Ground | GND | Pin 3, 8, 13, 18, 23, 28, 33, 38 | To breadboard ground rail |
@@ -88,6 +90,14 @@ For each LED, connect as follows:
 ### Step 5: Clock Output
 1. Connect GPIO 9 (Pin 12) to your target circuit's clock input
 2. If interfacing with 5V logic, use a logic level converter
+
+### Step 6: Second UART Output (Optional)
+1. Connect GPIO 16 (Pin 21) to the receive (RX) pin of your external UART device
+2. Connect GPIO 17 (Pin 22) to the transmit (TX) pin of your external UART device (if bidirectional communication is needed)
+3. Connect the ground of your external UART device to the Pico's ground rail
+4. Configure your external UART device for: 115200 baud, 8 data bits, 1 stop bit, no parity
+
+**Note**: This secondary UART provides the same status output as the USB CDC interface and is useful for external monitoring without requiring a USB connection to a computer.
 
 ## Breadboard Layout Example
 

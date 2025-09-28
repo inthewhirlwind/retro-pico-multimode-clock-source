@@ -44,6 +44,7 @@ static bool timer_active = false;
 void init_gpio(void);
 void init_adc(void);
 void init_uart(void);
+void init_second_uart(void);
 void handle_buttons(void);
 bool button_pressed(uint pin, uint button_index);
 void set_mode(clock_mode_t mode);
@@ -55,6 +56,7 @@ void start_high_frequency(void);
 void stop_high_frequency(void);
 bool low_freq_timer_callback(struct repeating_timer *t);
 void print_status(void);
+void print_status_to_uart1(void);
 uint32_t calculate_frequency_from_pot(uint16_t adc_value);
 
 int main() {
@@ -64,11 +66,13 @@ int main() {
     init_gpio();
     init_adc();
     init_uart();
+    init_second_uart();
     
     // Set initial mode
     set_mode(MODE_SINGLE_STEP);
     
     printf("Multimode Clock Source Starting...\n");
+    uart_puts(uart1, "Multimode Clock Source Starting...\n");
     print_status();
     
     while (true) {
@@ -131,6 +135,21 @@ void init_adc(void) {
 void init_uart(void) {
     // UART is already initialized by stdio_init_all()
     // This function is here for completeness and future expansion
+}
+
+void init_second_uart(void) {
+    // Initialize UART1 on GPIO pins 16 (TX) and 17 (RX)
+    uart_init(uart1, UART1_BAUD_RATE);
+    
+    // Set the GPIO pin functions to UART
+    gpio_set_function(UART1_TX_PIN, GPIO_FUNC_UART);
+    gpio_set_function(UART1_RX_PIN, GPIO_FUNC_UART);
+    
+    // Set UART format (8 data bits, 1 stop bit, no parity)
+    uart_set_format(uart1, 8, 1, UART_PARITY_NONE);
+    
+    // Turn off FIFO - we want to do this byte by byte
+    uart_set_fifo_enabled(uart1, false);
 }
 
 void handle_buttons(void) {
@@ -308,6 +327,50 @@ void stop_high_frequency(void) {
     gpio_put(LED_CLOCK_ACTIVITY, 0);
 }
 
+void print_status_to_uart1(void) {
+    const char* status_header = "\n=== Clock Source Status ===\n";
+    const char* status_footer = "===========================\n\n";
+    
+    // Send header
+    uart_puts(uart1, status_header);
+    
+    switch (current_mode) {
+        case MODE_SINGLE_STEP:
+            uart_puts(uart1, "Mode: Single Step\n");
+            if (single_step_active) {
+                uart_puts(uart1, "Status: Active\n");
+            } else {
+                uart_puts(uart1, "Status: Waiting for button press\n");
+            }
+            break;
+            
+        case MODE_LOW_FREQ:
+            uart_puts(uart1, "Mode: Low Frequency\n");
+            // Format frequency string
+            char freq_str[32];
+            snprintf(freq_str, sizeof(freq_str), "Frequency: %lu Hz\n", current_frequency);
+            uart_puts(uart1, freq_str);
+            break;
+            
+        case MODE_HIGH_FREQ:
+            uart_puts(uart1, "Mode: High Frequency\n");
+            char hfreq_str[32];
+            snprintf(hfreq_str, sizeof(hfreq_str), "Frequency: %lu Hz (1MHz)\n", current_frequency);
+            uart_puts(uart1, hfreq_str);
+            break;
+    }
+    
+    // Clock state
+    if (clock_state) {
+        uart_puts(uart1, "Clock State: HIGH\n");
+    } else {
+        uart_puts(uart1, "Clock State: LOW\n");
+    }
+    
+    // Send footer
+    uart_puts(uart1, status_footer);
+}
+
 void print_status(void) {
     printf("\n=== Clock Source Status ===\n");
     
@@ -330,4 +393,7 @@ void print_status(void) {
     
     printf("Clock State: %s\n", clock_state ? "HIGH" : "LOW");
     printf("===========================\n\n");
+    
+    // Also send status to second UART
+    print_status_to_uart1();
 }

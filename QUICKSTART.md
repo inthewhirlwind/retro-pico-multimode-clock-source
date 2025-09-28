@@ -35,6 +35,8 @@ make -j4
 | Clock Activity LED | 5 | 7 |
 | Mode LEDs | 6,7,8 | 9,10,11 |
 | Clock Output | 9 | 12 |
+| UART1 TX | 16 | 21 |
+| UART1 RX | 17 | 22 |
 | Potentiometer | 26 | 31 |
 
 ## Operation
@@ -49,7 +51,7 @@ make -j4
 - **Mode LEDs**: One lit per active mode
 
 ### UART Output
-Connect USB for real-time status at 115200 baud.
+Connect USB for real-time status at 115200 baud, or use GPIO 16 (UART1 TX) for external monitoring.
 
 ## Troubleshooting
 

@@ -58,6 +58,8 @@ A versatile multi-mode clock generator for retro computing applications using a 
 | Low Freq Mode LED | GPIO 7 | Low frequency mode indicator |
 | High Freq Mode LED | GPIO 8 | High frequency mode indicator |
 | Clock Output | GPIO 9 | Main clock signal output |
+| UART1 TX | GPIO 16 | Second UART transmit (status output) |
+| UART1 RX | GPIO 17 | Second UART receive (not used) |
 | Potentiometer | GPIO 26 (ADC0) | Frequency control input |
 
 ## Breadboard Wiring Diagram
@@ -78,6 +80,10 @@ GPIO 9 ──────────────┤ 10              32 │─�
                     │ 11              31 │──────────── GPIO 26 (ADC0) ── Potentiometer
                     │ 12              30 │
                     │ 13              29 │
+                    │ 14              28 │
+                    │ 15              27 │
+GPIO 16 (UART1 TX) ──┤ 16              26 │
+GPIO 17 (UART1 RX) ──┤ 17              25 │
                     │                     │
                     └─────────────────────┘
 
@@ -86,6 +92,7 @@ Components:
 - LEDs: Connect via 220Ω resistor between GPIO pin and GND
 - Potentiometer: Center pin to GPIO 26, outer pins to 3.3V and GND
 - Clock Output: Connect to your target circuit input
+- UART1: Connect GPIO 16 (TX) to receive pin of external UART device
 ```
 
 ### Detailed Wiring Instructions
@@ -107,6 +114,12 @@ Components:
 4. **Clock Output**:
    - Connect GPIO 9 to your target circuit
    - May need level shifting for 5V systems
+
+5. **Second UART Output**:
+   - Connect GPIO 16 (UART1 TX) to the receive pin of your external UART device
+   - Connect GPIO 17 (UART1 RX) to the transmit pin if bidirectional communication is needed
+   - Connect GND to the ground of your external UART device
+   - Baud rate: 115200, 8 data bits, 1 stop bit, no parity
 
 ## Building and Flashing
 
@@ -165,7 +178,12 @@ make -j4
 
 ## UART Output
 
-Connect to the Pico's USB CDC interface at 115200 baud to see real-time status:
+The device provides status output via two UART interfaces:
+
+1. **USB CDC (Primary)**: Connect to the Pico's USB CDC interface at 115200 baud
+2. **Hardware UART1 (Secondary)**: Available on GPIO 16 (TX) and GPIO 17 (RX) at 115200 baud
+
+Both UARTs output the same real-time status information:
 
 ```
 === Clock Source Status ===
@@ -174,6 +192,8 @@ Frequency: 1543 Hz
 Clock State: HIGH
 ===========================
 ```
+
+The secondary UART allows for external monitoring without requiring a USB connection to a computer.
 
 ## Technical Details
 
@@ -194,7 +214,10 @@ Clock State: HIGH
 1. **No clock output**: Check LED indicators to verify mode selection
 2. **Erratic frequency**: Ensure potentiometer connections are secure
 3. **Buttons not responding**: Verify button connections and check for proper debouncing
-4. **No UART output**: Ensure USB connection and correct baud rate (115200)
+4. **No UART output**: 
+   - USB CDC: Ensure USB connection and correct baud rate (115200)
+   - Hardware UART1: Check GPIO 16 (TX) and GPIO 17 (RX) connections, verify 115200 baud rate
+5. **Second UART not working**: Verify GPIO 16/17 are not being used by other functions and that the receiving device is properly connected
 
 ## License
 

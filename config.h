@@ -42,4 +42,9 @@
 // UART Configuration
 #define UART_BAUD_RATE      115200  // UART baud rate for status output
 
+// Second UART Configuration
+#define UART1_TX_PIN        16      // UART1 TX pin (GPIO 16)
+#define UART1_RX_PIN        17      // UART1 RX pin (GPIO 17)
+#define UART1_BAUD_RATE     115200  // Second UART baud rate
+
 #endif // CONFIG_H
