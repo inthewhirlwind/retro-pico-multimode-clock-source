@@ -202,12 +202,18 @@ The secondary UART allows for external monitoring without requiring a USB connec
 - Uses timestamp comparison for reliable operation
 
 ### Frequency Generation
-- **Low frequencies (1Hz-100kHz)**: Software timers with microsecond precision
+- **Low frequencies (8Hz-100kHz)**: Hardware PWM for precise timing and reduced CPU overhead
+- **Very low frequencies (1-7Hz)**: Hardware PWM at closest achievable frequency (~7.5Hz minimum)
 - **High frequency (1MHz)**: Hardware PWM for accuracy
 
 ### ADC Resolution
 - 12-bit ADC provides 4096 discrete frequency steps
 - Smooth frequency transitions across the entire range
+
+### Hardware Limitations
+- **Minimum PWM frequency**: ~7.5Hz due to 16-bit counter limitations
+- Potentiometer settings below 8Hz will output the minimum achievable frequency
+- All frequencies ≥8Hz are generated with <0.1% accuracy
 
 ## Troubleshooting
 
