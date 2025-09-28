@@ -99,27 +99,31 @@ int main() {
     bool button_held = false;
     
     while (true) {
-        // Check for button hold to enter UART mode
-        if (any_button_pressed()) {
-            if (!button_held) {
-                button_hold_start = to_ms_since_boot(get_absolute_time());
-                button_held = true;
-                printf("Hold button for UART mode...\n");
-            } else {
-                uint32_t hold_time = to_ms_since_boot(get_absolute_time()) - button_hold_start;
-                if (hold_time >= 3000) { // 3 seconds
-                    previous_mode = current_mode;
-                    set_mode(MODE_UART_CONTROL);
-                    printf("Entered UART Control Mode\n");
-                    button_held = false;
+        // Check for button hold to enter UART mode (only if not in UART mode)
+        if (current_mode != MODE_UART_CONTROL) {
+            if (any_button_pressed()) {
+                if (!button_held) {
+                    button_hold_start = to_ms_since_boot(get_absolute_time());
+                    button_held = true;
+                    printf("Hold button for UART mode...\n");
+                } else {
+                    uint32_t hold_time = to_ms_since_boot(get_absolute_time()) - button_hold_start;
+                    if (hold_time >= 3000) { // 3 seconds
+                        previous_mode = current_mode;
+                        set_mode(MODE_UART_CONTROL);
+                        printf("Entered UART Control Mode\n");
+                        button_held = false;
+                    }
                 }
+            } else {
+                if (button_held) {
+                    // Button released before 3 seconds - handle normal button press
+                    // Use a small delay to ensure button state is stable
+                    sleep_ms(50); // Debounce delay
+                    handle_buttons();
+                }
+                button_held = false;
             }
-        } else {
-            if (button_held) {
-                // Button released before 3 seconds - handle normal button press
-                handle_buttons();
-            }
-            button_held = false;
         }
         
         // Handle mode-specific updates
@@ -127,6 +131,9 @@ int main() {
             update_low_frequency();
         } else if (current_mode == MODE_UART_CONTROL) {
             handle_uart_control();
+        } else if (current_mode != MODE_UART_CONTROL && !button_held) {
+            // Only handle normal button presses when not holding for UART mode
+            handle_buttons();
         }
         
         sleep_ms(UPDATE_INTERVAL_MS); // Small delay to prevent excessive polling
@@ -521,18 +528,23 @@ void handle_uart_control(void) {
         if (c == '\r' || c == '\n') {
             if (uart_cmd_index > 0) {
                 uart_cmd_buffer[uart_cmd_index] = '\0';
+                printf("\n"); // New line after command
                 process_uart_command(uart_cmd_buffer);
                 uart_cmd_index = 0;
+            } else {
+                printf("Cmd> "); // Show prompt for empty commands
             }
-        } else if (c == '\b' || c == 127) { // Backspace
+        } else if (c == '\b' || c == 127) { // Backspace or DEL
             if (uart_cmd_index > 0) {
                 uart_cmd_index--;
-                printf("\b \b"); // Erase character
+                printf("\b \b"); // Erase character from terminal
             }
         } else if (uart_cmd_index < UART_CMD_BUFFER_SIZE - 1 && c >= 32 && c < 127) {
+            // Printable ASCII characters only
             uart_cmd_buffer[uart_cmd_index++] = c;
             printf("%c", c); // Echo character
         }
+        // Ignore other control characters
     }
 }
 
@@ -550,6 +562,9 @@ void show_uart_menu(void) {
 }
 
 void process_uart_command(const char* cmd) {
+    // Trim leading/trailing whitespace and convert to lowercase for comparison
+    while (*cmd == ' ') cmd++; // Skip leading spaces
+    
     if (strcmp(cmd, "stop") == 0) {
         stop_uart_frequency();
         uart_clock_running = false;
@@ -563,14 +578,29 @@ void process_uart_command(const char* cmd) {
         stop_uart_frequency();
         
     } else if (strncmp(cmd, "freq ", 5) == 0) {
-        uint32_t freq = atol(cmd + 5);
-        if (freq >= MIN_UART_FREQ && freq <= MAX_UART_FREQ) {
+        const char* freq_str = cmd + 5;
+        // Skip any spaces after "freq"
+        while (*freq_str == ' ') freq_str++;
+        
+        if (strlen(freq_str) == 0) {
+            printf("Missing frequency value. Usage: freq <Hz>\n");
+            return;
+        }
+        
+        char* endptr;
+        long freq_long = strtol(freq_str, &endptr, 10);
+        
+        // Check if conversion was successful and value is within range
+        if (endptr == freq_str || *endptr != '\0') {
+            printf("Invalid frequency format. Use numbers only.\n");
+        } else if (freq_long < MIN_UART_FREQ || freq_long > MAX_UART_FREQ) {
+            printf("Invalid frequency. Range: %d Hz to %d Hz\n", MIN_UART_FREQ, MAX_UART_FREQ);
+        } else {
+            uint32_t freq = (uint32_t)freq_long;
             uart_set_frequency = freq;
             start_uart_frequency(freq);
             uart_clock_running = true;
             printf("Frequency set to %lu Hz and running\n", freq);
-        } else {
-            printf("Invalid frequency. Range: %d Hz to %d Hz\n", MIN_UART_FREQ, MAX_UART_FREQ);
         }
         
     } else if (strcmp(cmd, "menu") == 0) {
@@ -593,9 +623,17 @@ void process_uart_command(const char* cmd) {
 void start_uart_frequency(uint32_t frequency) {
     stop_uart_frequency(); // Stop any existing timer
     
-    if (frequency > 0) {
-        uint32_t period_us = 500000 / frequency; // Half period in microseconds
-        add_repeating_timer_us(-period_us, uart_freq_timer_callback, NULL, &uart_freq_timer);
+    if (frequency > 0 && frequency <= MAX_UART_FREQ) {
+        // Calculate half period in microseconds
+        // For very high frequencies, ensure we don't overflow or get too small periods
+        if (frequency > 100000) { // Above 100kHz, use minimum safe period
+            uint32_t period_us = 500000 / frequency;
+            if (period_us < 1) period_us = 1; // Minimum 1 microsecond
+            add_repeating_timer_us(-period_us, uart_freq_timer_callback, NULL, &uart_freq_timer);
+        } else {
+            uint32_t period_us = 500000 / frequency; // Half period in microseconds
+            add_repeating_timer_us(-period_us, uart_freq_timer_callback, NULL, &uart_freq_timer);
+        }
         uart_timer_active = true;
     }
 }
