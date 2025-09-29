@@ -700,8 +700,15 @@ void process_uart_command(const char* cmd) {
         }
         
     } else if (strcmp(cmd, "power on") == 0) {
+        bool old_power_state = power_state;
         set_power_state(true);
         printf("Power turned ON\n");
+        
+        // If power just turned ON (OFF->ON transition), switch to Mode 1
+        if (!old_power_state && power_state) {
+            set_mode(MODE_SINGLE_STEP);
+            printf("Automatically switched to Mode 1 (Single Step)\n");
+        }
         
     } else if (strcmp(cmd, "power off") == 0) {
         set_power_state(false);
@@ -928,7 +935,14 @@ void handle_power_button(void) {
 }
 
 void toggle_power_state(void) {
+    bool old_power_state = power_state;
     set_power_state(!power_state);
+    
+    // If power just turned ON (OFF->ON transition), switch to Mode 1
+    if (!old_power_state && power_state) {
+        set_mode(MODE_SINGLE_STEP);
+        printf("Power ON - automatically switched to Mode 1 (Single Step)\n");
+    }
 }
 
 void set_power_state(bool state) {
