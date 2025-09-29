@@ -66,7 +66,7 @@ multimode_clock_source/
 ### ✅ UART Control Mode
 - [x] Hold any button for 3 seconds to enter mode
 - [x] Interactive command interface via UART
-- [x] Commands: stop, toggle, freq <Hz>, menu, status
+- [x] Commands: stop, toggle, freq <Hz>, reset, menu, status
 - [x] Frequency range 10Hz to 1MHz
 - [x] 30-second timeout returns to previous mode
 - [x] Any button press returns to previous mode

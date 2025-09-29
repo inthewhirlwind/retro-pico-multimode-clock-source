@@ -67,6 +67,7 @@ Use UART Control Mode for programmatic clock control:
    - `stop` - Stops clock output
    - `toggle` - Toggles clock state once  
    - `freq 5000` - Sets 5kHz frequency and runs continuously
+   - `reset` - Triggers reset pulse (6 clock cycles)
    - `menu` - Shows command help
    - `status` - Displays current status
 4. Press any button to return to previous mode
@@ -79,6 +80,7 @@ Commands:
   stop      - Stop the clock
   toggle    - Toggle clock state once
   freq <Hz> - Set frequency (1Hz to 1MHz) and run
+  reset     - Trigger reset pulse (6 clock cycles)
   menu      - Show this menu again
   status    - Show current status
 
@@ -91,6 +93,8 @@ Cmd> stop
 Clock stopped
 Cmd> toggle
 Clock toggled to HIGH
+Cmd> reset
+Reset pulse initiated via UART
 Cmd> status
 
 === Clock Source Status ===
