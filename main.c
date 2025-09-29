@@ -599,6 +599,7 @@ void show_uart_menu(void) {
     printf("  stop      - Stop the clock\n");
     printf("  toggle    - Toggle clock state once\n");
     printf("  freq <Hz> - Set frequency (1Hz to 1MHz) and run\n");
+    printf("  reset     - Trigger reset pulse (6 clock cycles)\n");
     printf("  menu      - Show this menu again\n");
     printf("  status    - Show current status\n");
     printf("\nPress any button to return to previous mode\n");
@@ -653,6 +654,14 @@ void process_uart_command(const char* cmd) {
         
     } else if (strcmp(cmd, "status") == 0) {
         print_status();
+        
+    } else if (strcmp(cmd, "reset") == 0) {
+        if (!reset_active) {
+            start_reset_pulse();
+            printf("Reset pulse initiated via UART\n");
+        } else {
+            printf("Reset pulse already active\n");
+        }
         
     } else if (strlen(cmd) == 0) {
         // Empty command, do nothing
