@@ -39,13 +39,15 @@ A versatile multi-mode clock generator for retro computing applications using a 
 
 ### User Interface
 
-- **4 Push Buttons**:
+- **5 Push Buttons**:
   - Button 1: Single Step Mode toggle/selection
   - Button 2: Low-Frequency Mode selection
   - Button 3: High-Frequency Mode selection
   - Button 4: Reset pulse trigger (positive edge triggered)
+  - Button 5: Power toggle (positive edge triggered)
   - **Hold any of first 3 buttons for 3 seconds**: Enter UART Control Mode
-- **7 LED Indicators**:
+- **8 LED Indicators**:
+  - Power-on LED (indicates when power is enabled)
   - Clock activity LED (shows current clock state)
   - Mode indicator LEDs (one for each mode including UART mode)
   - Reset state LEDs:
@@ -54,6 +56,18 @@ A versatile multi-mode clock generator for retro computing applications using a 
 - **UART Output**: Real-time mode and frequency information
 - **UART Input**: Interactive command interface in UART Control Mode
 - **Potentiometer**: Frequency control for Low-Frequency Mode
+
+### Power Control Functionality
+
+The power control system provides a hardware power switch for controlling external circuits:
+
+- **Power Button**: Debounced positive edge trigger toggles power state
+- **Power Control Output**: GPIO pin that controls power to external circuits via N-Channel MOSFET
+- **Power Logic**: LOW output = power ON, HIGH output = power OFF (for N-Channel MOSFET control)
+- **Default State**: Power starts OFF when device powers up
+- **Visual Indication**: Power-on LED illuminates when power is enabled
+- **UART Control**: Power can be controlled via UART commands (`power on`, `power off`)
+- **Status Display**: Power state is shown in all status outputs
 
 ### Reset Pulse Functionality
 
@@ -71,9 +85,10 @@ The reset functionality provides a hardware reset signal that can be used to res
 ## Hardware Requirements
 
 - Raspberry Pi Pico (or Pico W)
-- 4 Push buttons (momentary, normally open)
-- 7 LEDs with appropriate current-limiting resistors (220Ω recommended)
+- 5 Push buttons (momentary, normally open)
+- 8 LEDs with appropriate current-limiting resistors (220Ω recommended)
 - 1 Potentiometer (10kΩ recommended)
+- 1 N-Channel Logic-Level MOSFET (for power switching)
 - Breadboard and jumper wires
 - 3.3V pull-up resistors for buttons (optional, internal pull-ups used)
 
@@ -85,6 +100,8 @@ The reset functionality provides a hardware reset signal that can be used to res
 | Button 2 (Low Freq) | GPIO 3 | Low frequency mode button |
 | Button 3 (High Freq) | GPIO 4 | High frequency mode button |
 | Button 4 (Reset) | GPIO 11 | Reset pulse trigger button |
+| Button 5 (Power) | GPIO 15 | Power toggle button |
+| Power-On LED | GPIO 0 | Power-on indicator (on when power enabled) |
 | Clock Activity LED | GPIO 5 | Shows clock output state |
 | Single Step Mode LED | GPIO 6 | Single step mode indicator |
 | Low Freq Mode LED | GPIO 7 | Low frequency mode indicator |
@@ -94,6 +111,7 @@ The reset functionality provides a hardware reset signal that can be used to res
 | Reset High LED | GPIO 13 | Reset complete indicator (on for 250ms after reset) |
 | Clock Output | GPIO 9 | Main clock signal output |
 | Reset Output | GPIO 14 | Reset pulse output (normally high, low during reset) |
+| Power Control Output | GPIO 1 | Power control (LOW = power ON, HIGH = power OFF) |
 | UART1 TX | GPIO 16 | Second UART transmit (status output) |
 | UART1 RX | GPIO 17 | Second UART receive (not used) |
 | Potentiometer | GPIO 26 (ADC0) | Frequency control input |
