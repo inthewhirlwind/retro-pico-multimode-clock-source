@@ -37,7 +37,10 @@ static uint32_t current_frequency = 0;
 static bool single_step_active = false;
 
 // Button debouncing
-static uint32_t last_button_time[4] = {0, 0, 0, 0}; // Added reset button
+static uint32_t last_button_time[5] = {0, 0, 0, 0, 0}; // Added reset and power buttons
+
+// Power control variables
+static bool power_state = false; // false = OFF (default), true = ON
 
 // Timer for low frequency mode and UART mode
 static struct repeating_timer low_freq_timer;
@@ -97,6 +100,12 @@ void start_reset_pulse(void);
 void update_reset_state(void);
 void update_reset_leds(void);
 void set_reset_output(bool state);
+
+// Power control prototypes
+void handle_power_button(void);
+void toggle_power_state(void);
+void set_power_state(bool state);
+void update_power_led(void);
 
 int main() {
     stdio_init_all();
@@ -161,6 +170,10 @@ int main() {
         update_reset_state();
         update_reset_leds();
         
+        // Handle power functionality (independent of mode)
+        handle_power_button();
+        update_power_led();
+        
         sleep_ms(UPDATE_INTERVAL_MS); // Small delay to prevent excessive polling
     }
     
@@ -184,6 +197,10 @@ void init_gpio(void) {
     gpio_init(BUTTON_RESET);
     gpio_set_dir(BUTTON_RESET, GPIO_IN);
     gpio_pull_up(BUTTON_RESET);
+    
+    gpio_init(BUTTON_POWER);
+    gpio_set_dir(BUTTON_POWER, GPIO_IN);
+    gpio_pull_up(BUTTON_POWER);
     
     // Initialize LEDs as outputs
     gpio_init(LED_CLOCK_ACTIVITY);
@@ -214,6 +231,10 @@ void init_gpio(void) {
     gpio_set_dir(LED_RESET_HIGH, GPIO_OUT);
     gpio_put(LED_RESET_HIGH, 0);
     
+    gpio_init(LED_POWER_ON);
+    gpio_set_dir(LED_POWER_ON, GPIO_OUT);
+    gpio_put(LED_POWER_ON, 0); // Start with power LED off
+    
     // Initialize clock output
     gpio_init(CLOCK_OUTPUT);
     gpio_set_dir(CLOCK_OUTPUT, GPIO_OUT);
@@ -223,6 +244,11 @@ void init_gpio(void) {
     gpio_init(RESET_OUTPUT);
     gpio_set_dir(RESET_OUTPUT, GPIO_OUT);
     gpio_put(RESET_OUTPUT, 1);
+    
+    // Initialize power control output (HIGH = power OFF, default state)
+    gpio_init(POWER_OUTPUT);
+    gpio_set_dir(POWER_OUTPUT, GPIO_OUT);
+    gpio_put(POWER_OUTPUT, 1); // Start with power OFF
 }
 
 void init_adc(void) {
@@ -500,6 +526,13 @@ void print_status_to_uart1(void) {
         uart_puts(uart1, "Clock State: LOW\n");
     }
     
+    // Power state
+    if (power_state) {
+        uart_puts(uart1, "Power State: ON\n");
+    } else {
+        uart_puts(uart1, "Power State: OFF\n");
+    }
+    
     // Send footer
     uart_puts(uart1, status_footer);
 }
@@ -538,6 +571,7 @@ void print_status(void) {
            (current_mode == MODE_UART_CONTROL && uart_pwm_active) ? "PWM Active" :
            (current_mode == MODE_HIGH_FREQ) ? "PWM Active" :
            (clock_state ? "HIGH" : "LOW"));
+    printf("Power State: %s\n", power_state ? "ON" : "OFF");
     printf("===========================\n\n");
     
     // Also send status to second UART
@@ -600,6 +634,8 @@ void show_uart_menu(void) {
     printf("  toggle    - Toggle clock state once\n");
     printf("  freq <Hz> - Set frequency (1Hz to 1MHz) and run\n");
     printf("  reset     - Trigger reset pulse (6 clock cycles)\n");
+    printf("  power on  - Turn power ON\n");
+    printf("  power off - Turn power OFF\n");
     printf("  menu      - Show this menu again\n");
     printf("  status    - Show current status\n");
     printf("\nPress any button to return to previous mode\n");
@@ -662,6 +698,14 @@ void process_uart_command(const char* cmd) {
         } else {
             printf("Reset pulse already active\n");
         }
+        
+    } else if (strcmp(cmd, "power on") == 0) {
+        set_power_state(true);
+        printf("Power turned ON\n");
+        
+    } else if (strcmp(cmd, "power off") == 0) {
+        set_power_state(false);
+        printf("Power turned OFF\n");
         
     } else if (strlen(cmd) == 0) {
         // Empty command, do nothing
@@ -868,4 +912,33 @@ void update_reset_leds(void) {
 void set_reset_output(bool state) {
     reset_output_state = state;
     gpio_put(RESET_OUTPUT, state);
+}
+
+// Power control functionality implementation
+void handle_power_button(void) {
+    // Check for power button press (positive edge triggered, active low with pull-up)
+    bool pressed = !gpio_get(BUTTON_POWER);
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+    
+    if (pressed && (current_time - last_button_time[4] > DEBOUNCE_DELAY_MS)) {
+        last_button_time[4] = current_time;
+        toggle_power_state();
+        printf("Power %s\n", power_state ? "ON" : "OFF");
+    }
+}
+
+void toggle_power_state(void) {
+    set_power_state(!power_state);
+}
+
+void set_power_state(bool state) {
+    power_state = state;
+    // Power control is inverted: LOW = power ON, HIGH = power OFF
+    gpio_put(POWER_OUTPUT, !state);
+    update_power_led();
+}
+
+void update_power_led(void) {
+    // Power LED is on when power is enabled
+    gpio_put(LED_POWER_ON, power_state);
 }
