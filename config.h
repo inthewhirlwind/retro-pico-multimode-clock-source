@@ -11,19 +11,25 @@
 #define BUTTON_SINGLE_STEP  2   // Button 1: Single step mode
 #define BUTTON_LOW_FREQ     3   // Button 2: Low frequency mode  
 #define BUTTON_HIGH_FREQ    4   // Button 3: High frequency mode
+#define BUTTON_RESET        11  // Reset button (positive edge triggered)
 
 #define LED_CLOCK_ACTIVITY  5   // Clock activity indicator
 #define LED_SINGLE_STEP     6   // Single step mode indicator
 #define LED_LOW_FREQ        7   // Low frequency mode indicator  
 #define LED_HIGH_FREQ       8   // High frequency mode indicator
 #define LED_UART_MODE       10  // UART control mode indicator
+#define LED_RESET_LOW       12  // Reset state indicator (on when reset output is low)
+#define LED_RESET_HIGH      13  // Reset complete indicator (on for 250ms when reset returns to high)
 
 #define CLOCK_OUTPUT        9   // Main clock output pin
+#define RESET_OUTPUT        14  // Reset pulse output pin (high when not resetting, low during reset)
 #define POTENTIOMETER_PIN   26  // ADC0 - Potentiometer input (GPIO 26)
 
 // Timing Configuration
 #define DEBOUNCE_DELAY_MS   50      // Button debounce delay in milliseconds
 #define UPDATE_INTERVAL_MS  10      // Main loop update interval
+#define RESET_CYCLES        6       // Number of clock cycles for reset pulse
+#define RESET_HIGH_LED_MS   250     // Duration for reset high LED indicator
 
 // Frequency Configuration
 #define MIN_LOW_FREQ        1       // Minimum frequency in Hz for low freq mode

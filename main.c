@@ -37,7 +37,7 @@ static uint32_t current_frequency = 0;
 static bool single_step_active = false;
 
 // Button debouncing
-static uint32_t last_button_time[3] = {0, 0, 0};
+static uint32_t last_button_time[4] = {0, 0, 0, 0}; // Added reset button
 
 // Timer for low frequency mode and UART mode
 static struct repeating_timer low_freq_timer;
@@ -54,6 +54,15 @@ static char uart_cmd_buffer[UART_CMD_BUFFER_SIZE];
 static uint8_t uart_cmd_index = 0;
 static uint32_t uart_menu_timeout = 0;
 static bool uart_pwm_active = false;
+
+// Reset functionality variables
+static bool reset_active = false;
+static bool reset_output_state = true; // Reset output is normally high
+static uint32_t reset_cycle_count = 0;
+static uint32_t reset_start_time = 0;
+static uint32_t reset_high_led_timer = 0;
+static bool reset_waiting_for_edge = false; // For Mode 1 edge detection
+static bool last_clock_state_for_reset = false;
 
 // Function prototypes
 void init_gpio(void);
@@ -81,6 +90,13 @@ void stop_uart_frequency(void);
 void start_uart_pwm(uint32_t frequency);
 void stop_uart_pwm(void);
 bool any_button_pressed(void);
+
+// Reset functionality prototypes
+void handle_reset_button(void);
+void start_reset_pulse(void);
+void update_reset_state(void);
+void update_reset_leds(void);
+void set_reset_output(bool state);
 
 int main() {
     stdio_init_all();
@@ -140,6 +156,11 @@ int main() {
             handle_buttons();
         }
         
+        // Handle reset functionality (independent of mode)
+        handle_reset_button();
+        update_reset_state();
+        update_reset_leds();
+        
         sleep_ms(UPDATE_INTERVAL_MS); // Small delay to prevent excessive polling
     }
     
@@ -159,6 +180,10 @@ void init_gpio(void) {
     gpio_init(BUTTON_HIGH_FREQ);
     gpio_set_dir(BUTTON_HIGH_FREQ, GPIO_IN);
     gpio_pull_up(BUTTON_HIGH_FREQ);
+    
+    gpio_init(BUTTON_RESET);
+    gpio_set_dir(BUTTON_RESET, GPIO_IN);
+    gpio_pull_up(BUTTON_RESET);
     
     // Initialize LEDs as outputs
     gpio_init(LED_CLOCK_ACTIVITY);
@@ -181,10 +206,23 @@ void init_gpio(void) {
     gpio_set_dir(LED_UART_MODE, GPIO_OUT);
     gpio_put(LED_UART_MODE, 0);
     
+    gpio_init(LED_RESET_LOW);
+    gpio_set_dir(LED_RESET_LOW, GPIO_OUT);
+    gpio_put(LED_RESET_LOW, 0);
+    
+    gpio_init(LED_RESET_HIGH);
+    gpio_set_dir(LED_RESET_HIGH, GPIO_OUT);
+    gpio_put(LED_RESET_HIGH, 0);
+    
     // Initialize clock output
     gpio_init(CLOCK_OUTPUT);
     gpio_set_dir(CLOCK_OUTPUT, GPIO_OUT);
     gpio_put(CLOCK_OUTPUT, 0);
+    
+    // Initialize reset output (normally high)
+    gpio_init(RESET_OUTPUT);
+    gpio_set_dir(RESET_OUTPUT, GPIO_OUT);
+    gpio_put(RESET_OUTPUT, 1);
 }
 
 void init_adc(void) {
@@ -722,4 +760,103 @@ bool any_button_pressed(void) {
     return !gpio_get(BUTTON_SINGLE_STEP) || 
            !gpio_get(BUTTON_LOW_FREQ) || 
            !gpio_get(BUTTON_HIGH_FREQ);
+}
+
+// Reset functionality implementation
+void handle_reset_button(void) {
+    // Check for reset button press (positive edge triggered, active low with pull-up)
+    bool pressed = !gpio_get(BUTTON_RESET);
+    uint32_t current_time = to_ms_since_boot(get_absolute_time());
+    
+    if (pressed && (current_time - last_button_time[3] > DEBOUNCE_DELAY_MS)) {
+        last_button_time[3] = current_time;
+        if (!reset_active) {
+            start_reset_pulse();
+            printf("Reset pulse initiated\n");
+        }
+    }
+}
+
+void start_reset_pulse(void) {
+    reset_active = true;
+    reset_cycle_count = 0;
+    reset_start_time = to_ms_since_boot(get_absolute_time());
+    reset_waiting_for_edge = (current_mode == MODE_SINGLE_STEP); // Mode 1 needs edge detection
+    last_clock_state_for_reset = clock_state;
+    set_reset_output(false); // Start reset pulse (low)
+    printf("Reset pulse started, mode: %d\n", current_mode + 1);
+}
+
+void update_reset_state(void) {
+    if (!reset_active) return;
+    
+    if (current_mode == MODE_SINGLE_STEP) {
+        // Mode 1: Track clock low-to-high transitions
+        if (reset_waiting_for_edge && !last_clock_state_for_reset && clock_state) {
+            // Detected low-to-high transition
+            reset_cycle_count++;
+            printf("Reset cycle %d/6 (Mode 1)\n", reset_cycle_count);
+            
+            if (reset_cycle_count >= RESET_CYCLES) {
+                set_reset_output(true); // End reset pulse
+                reset_active = false;
+                reset_high_led_timer = to_ms_since_boot(get_absolute_time());
+                printf("Reset pulse complete (Mode 1)\n");
+            }
+        }
+        last_clock_state_for_reset = clock_state;
+    } else {
+        // Modes 2, 3, 4: Count actual clock cycles using timing
+        uint32_t elapsed_ms = to_ms_since_boot(get_absolute_time()) - reset_start_time;
+        uint32_t required_ms = 0;
+        
+        // Calculate required time based on current frequency
+        if (current_mode == MODE_LOW_FREQ && current_frequency > 0) {
+            // For low frequency mode, use current frequency
+            required_ms = (RESET_CYCLES * 1000) / current_frequency;
+        } else if (current_mode == MODE_HIGH_FREQ) {
+            // For high frequency mode, use fixed 1MHz
+            required_ms = (RESET_CYCLES * 1000) / HIGH_FREQ_OUTPUT;
+            if (required_ms == 0) required_ms = 1; // Minimum 1ms for visibility
+        } else if (current_mode == MODE_UART_CONTROL && uart_set_frequency > 0) {
+            // For UART control mode, use set frequency
+            required_ms = (RESET_CYCLES * 1000) / uart_set_frequency;
+        } else {
+            // Fallback for any undefined states
+            required_ms = 60; // Default 60ms (approximately 100Hz for 6 cycles)
+        }
+        
+        // Ensure minimum time for visibility (at least 10ms)
+        if (required_ms < 10) required_ms = 10;
+        
+        if (elapsed_ms >= required_ms) {
+            set_reset_output(true); // End reset pulse
+            reset_active = false;
+            reset_high_led_timer = to_ms_since_boot(get_absolute_time());
+            printf("Reset pulse complete (Mode %d, %dms)\n", current_mode + 1, elapsed_ms);
+        }
+    }
+}
+
+void update_reset_leds(void) {
+    // LED_RESET_LOW: On when reset output is low
+    gpio_put(LED_RESET_LOW, !reset_output_state);
+    
+    // LED_RESET_HIGH: On for 250ms when reset returns to high
+    if (reset_high_led_timer > 0) {
+        uint32_t current_time = to_ms_since_boot(get_absolute_time());
+        if (current_time - reset_high_led_timer < RESET_HIGH_LED_MS) {
+            gpio_put(LED_RESET_HIGH, 1);
+        } else {
+            gpio_put(LED_RESET_HIGH, 0);
+            reset_high_led_timer = 0; // Clear timer
+        }
+    } else {
+        gpio_put(LED_RESET_HIGH, 0);
+    }
+}
+
+void set_reset_output(bool state) {
+    reset_output_state = state;
+    gpio_put(RESET_OUTPUT, state);
 }
