@@ -6,15 +6,16 @@ This document provides comprehensive wiring instructions for the Multimode Clock
 
 ### Required Components
 - 1x Raspberry Pi Pico
-- 4x Push buttons (momentary, normally open)
-- 7x LEDs (any color, 3mm or 5mm)
-- 7x 220Ω resistors (for LED current limiting)
+- 5x Push buttons (momentary, normally open)
+- 8x LEDs (any color, 3mm or 5mm)
+- 8x 220Ω resistors (for LED current limiting)
 - 1x 10kΩ potentiometer (linear taper)
+- 1x N-Channel Logic-Level MOSFET (for power switching)
 - 1x Breadboard (half-size or larger)
 - Jumper wires (male-to-male)
 
 ### Optional Components
-- 4x 10kΩ resistors (external pull-ups for buttons - not needed as internal pull-ups are used)
+- 5x 10kΩ resistors (external pull-ups for buttons - not needed as internal pull-ups are used)
 - 1x Logic level converter (if interfacing with 5V systems)
 
 ## Pin Assignment Summary
@@ -25,6 +26,8 @@ This document provides comprehensive wiring instructions for the Multimode Clock
 | Button 2 (Low Freq) | GPIO 3 | Pin 5 | Button to GND |
 | Button 3 (High Freq) | GPIO 4 | Pin 6 | Button to GND |
 | Button 4 (Reset) | GPIO 11 | Pin 15 | Button to GND |
+| Button 5 (Power) | GPIO 15 | Pin 20 | Button to GND |
+| Power-On LED | GPIO 0 | Pin 1 | LED + 220Ω resistor to GND |
 | Clock Activity LED | GPIO 5 | Pin 7 | LED + 220Ω resistor to GND |
 | Single Step LED | GPIO 6 | Pin 9 | LED + 220Ω resistor to GND |
 | Low Freq LED | GPIO 7 | Pin 10 | LED + 220Ω resistor to GND |
@@ -34,6 +37,7 @@ This document provides comprehensive wiring instructions for the Multimode Clock
 | Reset High LED | GPIO 13 | Pin 17 | LED + 220Ω resistor to GND |
 | Clock Output | GPIO 9 | Pin 12 | To target circuit |
 | Reset Output | GPIO 14 | Pin 19 | To target circuit |
+| Power Control Output | GPIO 1 | Pin 2 | To MOSFET gate (LOW = power ON) |
 | UART1 TX | GPIO 16 | Pin 21 | To external UART RX |
 | UART1 RX | GPIO 17 | Pin 22 | To external UART TX |
 | Potentiometer | GPIO 26 (ADC0) | Pin 31 | Center pin |
@@ -69,8 +73,18 @@ For each of the four buttons:
 2. Connect one terminal to GPIO 11 (Pin 15) with a jumper wire
 3. Connect the other terminal to the ground rail
 
+**Button 5 (Power):**
+1. Place button on breadboard
+2. Connect one terminal to GPIO 15 (Pin 20) with a jumper wire
+3. Connect the other terminal to the ground rail
+
 ### Step 3: LED Indicators
 For each LED, connect as follows:
+
+**Power-On LED:**
+1. Connect LED anode (long leg) to one end of a 220Ω resistor
+2. Connect the other end of the resistor to GPIO 0 (Pin 1)
+3. Connect LED cathode (short leg) to the ground rail
 
 **Clock Activity LED:**
 1. Connect LED anode (long leg) to one end of a 220Ω resistor
@@ -119,7 +133,15 @@ For each LED, connect as follows:
 
 **Important**: The reset output is normally high (3.3V) and goes low during reset pulses. Ensure your target circuit expects this logic level.
 
-### Step 6: Second UART Output (Optional)
+### Step 6: Power Control Output
+1. Connect GPIO 1 (Pin 2) to the gate of an N-Channel Logic-Level MOSFET
+2. Connect the MOSFET drain to the positive supply of your target circuit
+3. Connect the MOSFET source to the positive power rail (3.3V or external supply)
+4. Add a 10kΩ pull-down resistor between the MOSFET gate and ground for safety
+
+**Important**: The power control output is LOW when power should be ON, HIGH when power should be OFF. This logic is designed for N-Channel MOSFET control where LOW gate voltage turns the MOSFET OFF (cutting power) and HIGH gate voltage turns it ON (supplying power).
+
+### Step 7: Second UART Output (Optional)
 1. Connect GPIO 16 (Pin 21) to the receive (RX) pin of your external UART device
 2. Connect GPIO 17 (Pin 22) to the transmit (TX) pin of your external UART device (if bidirectional communication is needed)
 3. Connect the ground of your external UART device to the Pico's ground rail

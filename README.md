@@ -32,6 +32,8 @@ A versatile multi-mode clock generator for retro computing applications using a 
      - `toggle` - Toggle clock state once
      - `freq <Hz>` - Set frequency (1Hz to 1MHz) and run continuously
      - `reset` - Trigger reset pulse (6 clock cycles)
+     - `power on` - Turn power ON
+     - `power off` - Turn power OFF
      - `menu` - Show command menu
      - `status` - Display current status
    - 30-second inactivity timeout
@@ -238,6 +240,9 @@ make -j4
   - `stop` - Stops clock output
   - `toggle` - Toggles clock state once
   - `freq 1000` - Sets frequency to 1000Hz and runs continuously
+  - `reset` - Trigger reset pulse (6 clock cycles)
+  - `power on` - Turn power ON
+  - `power off` - Turn power OFF
   - `menu` - Shows available commands
   - `status` - Displays current mode status
 - Frequency range: 1Hz to 1MHz
@@ -251,6 +256,8 @@ make -j4
     toggle    - Toggle clock state once
     freq <Hz> - Set frequency (1Hz to 1MHz) and run
     reset     - Trigger reset pulse (6 clock cycles)
+    power on  - Turn power ON
+    power off - Turn power OFF
     menu      - Show this menu again
     status    - Show current status
 
@@ -265,6 +272,10 @@ make -j4
   Clock toggled to HIGH
   Cmd> reset
   Reset pulse initiated via UART
+  Cmd> power on
+  Power turned ON
+  Cmd> power off
+  Power turned OFF
   Cmd>
   ```
 
