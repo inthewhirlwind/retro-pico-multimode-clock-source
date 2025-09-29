@@ -178,6 +178,55 @@ Components:
    - Connect GND to the ground of your external UART device
    - Baud rate: 115200, 8 data bits, 1 stop bit, no parity
 
+## Code Architecture
+
+### Modular Design
+
+The codebase has been refactored into modular components for improved maintainability and reusability. The original monolithic `main.c` (957 lines) has been split into focused modules:
+
+#### Core Files
+- `main.c` - Main application logic and mode coordination
+- `config.h` - Pin definitions and configuration constants
+
+#### Module Components
+1. **hardware_init** - GPIO, ADC, and UART initialization
+2. **button_handler** - Button debouncing and mode switching
+3. **clock_generator** - Clock generation for all modes (single step, low freq, high freq)
+4. **uart_control** - UART command processing and PWM control
+5. **reset_control** - Reset pulse generation and LED management
+6. **power_control** - Power state management
+7. **status_display** - Status output and LED management
+
+#### Benefits
+- **Modularity**: Each module handles a specific aspect of functionality
+- **Reusability**: Modules can be easily reused in other projects
+- **Maintainability**: Smaller, focused files are easier to understand and modify
+- **Testability**: Individual modules can be tested independently
+
+#### Module Interfaces
+Each module provides:
+- Clean header file with public function declarations
+- Initialization function for setup
+- Getter/setter functions for state access
+- Well-defined interfaces with minimal dependencies
+
+For detailed information about the refactoring, see [REFACTORING.md](REFACTORING.md).
+
+### Using Modules in Other Projects
+
+The modular architecture makes it easy to reuse components:
+
+```c
+#include "clock_generator.h"
+
+// Initialize and use clock generation
+clock_generator_init();
+start_high_frequency();       // 1MHz PWM output
+update_low_frequency();       // Potentiometer-controlled frequency
+```
+
+See [REFACTORING.md](REFACTORING.md) for complete usage examples and migration guide.
+
 ## Building and Flashing
 
 ### Prerequisites

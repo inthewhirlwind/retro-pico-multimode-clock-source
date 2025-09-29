@@ -12,7 +12,21 @@ pico_sdk_init()
 # rest of your project
 add_executable(multimode_clock_source
         main.c
+        hardware_init.c
+        button_handler.c
+        clock_generator.c
+        uart_control.c
+        reset_control.c
+        power_control.c
+        status_display.c
         config.h
+        hardware_init.h
+        button_handler.h
+        clock_generator.h
+        uart_control.h
+        reset_control.h
+        power_control.h
+        status_display.h
         )
 
 # Add pico_stdlib library which aggregates commonly used features
