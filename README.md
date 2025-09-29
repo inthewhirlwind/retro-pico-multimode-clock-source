@@ -32,7 +32,7 @@ A versatile multi-mode clock generator for retro computing applications using a 
      - `toggle` - Toggle clock state once
      - `freq <Hz>` - Set frequency (1Hz to 1MHz) and run continuously
      - `reset` - Trigger reset pulse (6 clock cycles)
-     - `power on` - Turn power ON
+     - `power on` - Turn power ON (automatically switches to Mode 1)
      - `power off` - Turn power OFF
      - `menu` - Show command menu
      - `status` - Display current status
@@ -66,7 +66,8 @@ The power control system provides a hardware power switch for controlling extern
 - **Power Button**: Debounced positive edge trigger toggles power state
 - **Power Control Output**: GPIO pin that controls power to external circuits via N-Channel MOSFET
 - **Power Logic**: LOW output = power ON, HIGH output = power OFF (for N-Channel MOSFET control)
-- **Default State**: Power starts OFF when device powers up
+- **Default State**: Power starts OFF when device powers up, with Mode 1 (Single Step) as the default clock mode
+- **Automatic Mode Switching**: When power toggles from OFF to ON, the system automatically switches to Mode 1 (Single Step)
 - **Visual Indication**: Power-on LED illuminates when power is enabled
 - **UART Control**: Power can be controlled via UART commands (`power on`, `power off`)
 - **Status Display**: Power state is shown in all status outputs
@@ -241,7 +242,7 @@ make -j4
   - `toggle` - Toggles clock state once
   - `freq 1000` - Sets frequency to 1000Hz and runs continuously
   - `reset` - Trigger reset pulse (6 clock cycles)
-  - `power on` - Turn power ON
+  - `power on` - Turn power ON (automatically switches to Mode 1)
   - `power off` - Turn power OFF
   - `menu` - Shows available commands
   - `status` - Displays current mode status
@@ -256,7 +257,7 @@ make -j4
     toggle    - Toggle clock state once
     freq <Hz> - Set frequency (1Hz to 1MHz) and run
     reset     - Trigger reset pulse (6 clock cycles)
-    power on  - Turn power ON
+    power on  - Turn power ON (automatically switches to Mode 1)
     power off - Turn power OFF
     menu      - Show this menu again
     status    - Show current status
@@ -274,6 +275,7 @@ make -j4
   Reset pulse initiated via UART
   Cmd> power on
   Power turned ON
+  Automatically switched to Mode 1 (Single Step)
   Cmd> power off
   Power turned OFF
   Cmd>
